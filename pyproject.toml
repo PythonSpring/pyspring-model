@@ -1,0 +1,32 @@
+[project]
+name = "PySpringModel"
+version = "1.0.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "William Chen", email = "william_w_chen@trendmicro.com"},
+]
+dependencies = [
+    "py-spring @ git+git+https://github.com/PythonSpring/pyspring-core.git@refactor/pyspring-model-isolation",
+    "isort>=5.13.2",
+]
+requires-python = ">=3.10"
+readme = "README.md"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+
+[tool.pdm]
+distribution = true
+version = { source = "file", path = "py_spring_model/__init__.py" }
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "ruff>=0.6.3",
+    "isort>=5.13.2",
+    "pytest>=8.3.2",
+    "pytest-mock>=3.14.0",
+]
+
