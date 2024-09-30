@@ -1,5 +1,5 @@
 [project]
-name = "PySpringModel"
+name = "py_spring_model"
 version = "1.0.0"
 description = "Default template for PDM package"
 authors = [
