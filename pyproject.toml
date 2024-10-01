@@ -6,7 +6,7 @@ authors = [
     {name = "William Chen", email = "william_w_chen@trendmicro.com"},
 ]
 dependencies = [
-    "py-spring @ git+https://github.com/PythonSpring/pyspring-core.git@refactor/pyspring-model-isolation",
+    "py-spring @ git+https://github.com/PythonSpring/pyspring-core.git@main",
     "isort>=5.13.2",
     "sqlmodel>=0.0.22",
 ]
