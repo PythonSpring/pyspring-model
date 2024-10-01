@@ -8,6 +8,7 @@ authors = [
 dependencies = [
     "py-spring @ git+https://github.com/PythonSpring/pyspring-core.git@refactor/pyspring-model-isolation",
     "isort>=5.13.2",
+    "sqlmodel>=0.0.22",
 ]
 requires-python = ">=3.10"
 readme = "README.md"
