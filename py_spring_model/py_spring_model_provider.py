@@ -112,6 +112,7 @@ class PySpringModelProvider(EntityProvider, Component):
                 "AppContext is not set by the framework"
             )
 
+        self.app_file_groups = self._group_file_paths(self.app_context.all_file_paths)
         self.sql_engine = create_engine(
             url=self.props.sqlalchemy_database_uri, echo=True
         )
@@ -119,8 +120,6 @@ class PySpringModelProvider(EntityProvider, Component):
             raise ApplicationContextNotSetError(
                 "AppContext is not set by the framework"
             )
-
-        self.app_file_groups = self._group_file_paths(self.app_context.all_file_paths)
         self._import_model_modules()
         self._create_all_tables()
 
@@ -130,5 +129,5 @@ def provide_py_spring_model() -> EntityProvider:
         component_classes=[
             PySpringModelProvider
         ],  # injecting self for getting properties
-        properties_classes=[PySpringModelProperties],
+        properties_classes=[PySpringModelProperties]
     )
