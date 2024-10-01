@@ -11,6 +11,7 @@ from sqlmodel import SQLModel
 
 from py_spring_model.core.commons import ApplicationFileGroups, PySpringModelProperties
 from py_spring_model.core.model import PySpringModel
+from py_spring_model.repository.repository_base import RepositoryBase
 
 
 class ApplicationContextNotSetError(Exception): ...
@@ -101,6 +102,8 @@ class PySpringModelProvider(EntityProvider, Component):
             cast(list[Type[PySpringModel]], list(self._model_classes))
         )
         PySpringModel.set_metadata(SQLModel.metadata)
+        RepositoryBase.engine = self.sql_engine
+        RepositoryBase.connection = self.sql_engine.connect()
 
     def provider_init(self) -> None:
         self.app_context: ApplicationContext
