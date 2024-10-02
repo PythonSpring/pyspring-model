@@ -1,6 +1,6 @@
 [project]
 name = "py_spring_model"
-version = "1.0.0"
+version = "0.1.0"
 description = "Default template for PDM package"
 authors = [
     {name = "William Chen", email = "william_w_chen@trendmicro.com"},

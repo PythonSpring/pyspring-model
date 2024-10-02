@@ -53,7 +53,7 @@ class PySpringModelProvider(EntityProvider, Component):
             logger.error(
                 f"[SQLMODEL TABLE MODEL IMPORT FAILED] Failed to import model modules: {error}"
             )
-            self._model_classes = self._get_pyspring_model_inheritors()
+        self._model_classes = self._get_pyspring_model_inheritors()
 
     def _is_from_model_file(self, cls: Type[object]) -> bool:
         try:
