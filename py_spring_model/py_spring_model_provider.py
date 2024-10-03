@@ -1,10 +1,10 @@
 import inspect
 from typing import Iterable, Type, cast
 
-import py_spring.core.utils as core_utils
+import py_spring_core.core.utils as core_utils
 from loguru import logger
-from py_spring import Component, EntityProvider
-from py_spring.core.application.context.application_context import ApplicationContext
+from py_spring_core import Component, EntityProvider
+from py_spring_core.core.application.context.application_context import ApplicationContext
 from sqlalchemy import create_engine
 from sqlalchemy.exc import InvalidRequestError as SqlAlehemyInvalidRequestError
 from sqlmodel import SQLModel

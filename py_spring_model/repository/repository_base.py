@@ -1,6 +1,6 @@
 from typing import Type, TypeVar
 
-from py_spring import Component
+from py_spring_core import Component
 from pydantic import BaseModel
 from sqlalchemy import Engine, text
 from sqlalchemy.engine.base import Connection

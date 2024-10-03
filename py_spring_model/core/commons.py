@@ -1,4 +1,4 @@
-from py_spring import Properties
+from py_spring_core import Properties
 from pydantic import BaseModel, ConfigDict
 
 
