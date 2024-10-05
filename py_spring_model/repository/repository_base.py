@@ -13,7 +13,7 @@ T = TypeVar("T", bound=BaseModel)
 
 class RepositoryBase(Component):
     engine: Engine
-    connection: Connection  
+    connection: Connection
 
     def _execute_sql_returning_model(self, sql: str, model_cls: Type[T]) -> list[T]:
         cursor = self.connection.execute(text(sql))
