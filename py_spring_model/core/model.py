@@ -6,6 +6,8 @@ from sqlalchemy import Engine, MetaData
 from sqlalchemy.engine.base import Connection
 from sqlmodel import Session, SQLModel
 
+from py_spring_model.core.py_spring_session import PySpringSession
+
 
 class PySpringModel(SQLModel):
     """
@@ -69,13 +71,13 @@ class PySpringModel(SQLModel):
         return {str(_model.__tablename__): _model for _model in cls._models}
 
     @classmethod
-    def create_session(cls) -> Session:
+    def create_session(cls) -> PySpringSession:
         engine = cls.get_engine()
-        return Session(engine, expire_on_commit=False)
+        return PySpringSession(engine, expire_on_commit=False)
 
     @classmethod
     @contextlib.contextmanager
-    def create_managed_session(cls) -> Iterator[Session]:
+    def create_managed_session(cls) -> Iterator[PySpringSession]:
         """
         Creates a managed session context that will automatically close the session when the context is exited.
         ## Example Syntax:
@@ -88,6 +90,8 @@ class PySpringModel(SQLModel):
             yield session
             logger.info("[MANAGED SESSION COMMIT] Session committing...")
             session.commit()
+            logger.info("[MANAGED SESSION COMMIT] Session committed, refreshing instances...")
+            session.refresh_current_session_instances()
             logger.success("[MANAGED SESSION COMMIT] Session committed.")
         except Exception as error:
             logger.error(error)
