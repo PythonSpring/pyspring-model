@@ -1,4 +1,5 @@
 from typing import Type, TypeVar
+from contextlib import _GeneratorContextManager
 
 from py_spring_core import Component
 from pydantic import BaseModel
@@ -7,6 +8,7 @@ from sqlalchemy.engine.base import Connection
 from sqlmodel import Session
 
 from py_spring_model.core.model import PySpringModel
+from py_spring_model.core.py_spring_session import PySpringSession
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -24,3 +26,6 @@ class RepositoryBase(Component):
 
     def _create_session(self) -> Session:
         return PySpringModel.create_session()
+    
+    def create_managed_session(self) -> _GeneratorContextManager[PySpringSession]:
+        return PySpringModel.create_managed_session()

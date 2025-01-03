@@ -69,6 +69,10 @@ class PySpringModel(SQLModel):
         if cls._models is None:
             raise ValueError("[MODEL_LOOKUP NOT SET] Model lookup is not set")
         return {str(_model.__tablename__): _model for _model in cls._models}
+    
+    def clone(self) -> "PySpringModel":
+        return self.model_validate_json(self.model_dump_json())
+
 
     @classmethod
     def create_session(cls) -> PySpringSession:

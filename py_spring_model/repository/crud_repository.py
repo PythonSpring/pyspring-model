@@ -1,4 +1,3 @@
-import functools
 from typing import (
     Any,
     Callable,
@@ -12,14 +11,14 @@ from typing import (
 )
 from uuid import UUID
 
-from loguru import logger
 from sqlalchemy import Select
-from sqlmodel import Session, SQLModel, select
+from sqlmodel import Session, select
 from sqlmodel.sql.expression import Select, SelectOfScalar
 
+from py_spring_model.core.model import PySpringModel
 from py_spring_model.repository.repository_base import RepositoryBase
 
-T = TypeVar("T", bound=SQLModel)
+T = TypeVar("T", bound=PySpringModel)
 ID = TypeVar("ID", UUID, int)
 
 
@@ -29,22 +28,6 @@ class SessionNotFoundError(Exception): ...
 FT = TypeVar("FT", bound=Callable[..., Any])
 
 
-def session_auto_commit(func: FT) -> FT:
-    @functools.wraps(func)
-    def wrapper(self: "CrudRepository", *args, **kwargs):
-        session: Session = kwargs.get("session") or self._create_session()
-        try:
-            result = func(self, *args, session=session, **kwargs)
-            session.commit()
-            return result
-        except Exception as error:
-            session.rollback()
-            logger.error(f"[TRANSACTION ROLLBACK] Transaction failed: {error}")
-            raise error
-        finally:
-            session.close()
-
-    return wrapper  # type: ignore
 
 
 class CrudRepository(RepositoryBase, Generic[ID, T]):
@@ -92,7 +75,6 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
         session: Optional[Session] = None,
     ) -> tuple[Session, Optional[T]]:
         session = session or self._create_session()
-
         statement = select(self.model_class).filter_by(**query_by)
         return session, session.exec(statement).first()
 
@@ -102,7 +84,6 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
         session: Optional[Session] = None,
     ) -> tuple[Session, list[T]]:
         session = session or self._create_session()
-
         statement = select(self.model_class).filter_by(**query_by)
         return session, list(session.exec(statement).fetchall())
 
@@ -112,96 +93,89 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
         session: Optional[Session] = None,
     ) -> tuple[Session, list[T]]:
         session = session or self._create_session()
-
         return session, list(session.exec(statement).fetchall())
 
-    def find_by_id(self, id: ID, session: Optional[Session] = None) -> Optional[T]:
-        session = session or self._create_session()
-
-        statement = select(self.model_class).where(self.model_class.id == id)  # type: ignore
-        return session.exec(statement).first()
+    def find_by_id(self, id: ID) -> Optional[T]:
+        with self.create_managed_session() as session:
+            statement = select(self.model_class).where(self.model_class.id == id)  # type: ignore
+            optional_entity = session.exec(statement).first()
+            if optional_entity is None:
+                return 
+        
+            return optional_entity.clone() # type: ignore
 
     def find_all_by_ids(
-        self, ids: list[ID], session: Optional[Session] = None
+        self, ids: list[ID]
     ) -> list[T]:
-        session = session or self._create_session()
-        statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
-        return list(session.exec(statement).all())
+        with self.create_managed_session() as session:
+            statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
+            return [entity.clone() for entity in session.exec(statement).all()] # type: ignore
 
-    def find_all(self, session: Optional[Session] = None) -> list[T]:
-        session = session or self._create_session()
+    def find_all(self) -> list[T]:
+        with self.create_managed_session() as session:
+            statement = select(self.model_class)  # type: ignore
+            return [entity.clone() for entity in session.exec(statement).all()] # type: ignore
 
-        statement = select(self.model_class)  # type: ignore
-        return list(session.exec(statement).all())
+    def save(self, entity: T) -> T:
+        with self.create_managed_session() as session:
+            session.add(entity)
+        return entity.clone() # type: ignore
 
-    @session_auto_commit
-    def save(self, entity: T, session: Optional[Session] = None) -> T:
-        session = session or self._create_session()
-
-        session.add(entity)
-        return entity
-
-    @session_auto_commit
     def save_all(
         self,
         entities: Iterable[T],
-        session: Optional[Session] = None,
     ) -> bool:
-        session = session or self._create_session()
-        session.add_all(entities)
+        with self.create_managed_session() as session:
+            session.add_all(entities)
         return True
 
-    @session_auto_commit
-    def delete(self, entity: T, session: Optional[Session] = None) -> bool:
-        if session is None:
-            session = self._create_session()
-        session.delete(entity)
+    def delete(self, entity: T) -> bool:
+        with self.create_managed_session() as session:
+            optional_intance = self._find_by_query(entity.model_dump(), session)
+            if optional_intance is None:
+                return False
+            session.delete(optional_intance)
         return True
 
-    @session_auto_commit
     def delete_all(
-        self, entities: Iterable[T], session: Optional[Session] = None
+        self, entities: Iterable[T]
     ) -> bool:
-        session = session or self._create_session()
-        for entity in entities:
+        with self.create_managed_session() as session:
+            for entity in entities:
+                session.delete(entity)
+
+        return True
+
+    def delete_by_id(self, _id: ID) -> bool:
+        with self.create_managed_session() as session:
+            entity = self._find_by_query({"id": _id}, session)
+            if entity is None:
+                return False
             session.delete(entity)
         return True
 
-    @session_auto_commit
-    def delete_by_id(self, id: ID, session: Optional[Session] = None) -> bool:
-        session = session or self._create_session()
-
-        entity = self.find_by_id(id, session)
-        if entity is not None:
-            session.delete(entity)
-            return True
-        return False
-
-    @session_auto_commit
     def delete_all_by_ids(
-        self, ids: list[ID], session: Optional[Session] = None
+        self, ids: list[ID]
     ) -> bool:
-        session = session or self._create_session()
+        with self.create_managed_session() as session:
+            statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
+            entities = self._find_by_statement(statement, session)
+            for entity in entities:
+                session.delete(entity)
+            return True
 
-        entities = self.find_all_by_ids(ids, session)
-        for entity in entities:
-            session.delete(entity)
-        return True
-
-    @session_auto_commit
     def upsert(
-        self, entity: T, query_by: dict[str, Any], session: Optional[Session] = None
+        self, entity: T, query_by: dict[str, Any]
     ) -> T:
-        session = session or self._create_session()
-
-        statement = select(self.model_class).filter_by(**query_by)  # type: ignore
-        _, existing_entity = self._find_by_statement(statement, session)
-        if existing_entity is not None:
-            # If the entity exists, update its attributes
-            for key, value in entity.model_dump().items():
-                setattr(existing_entity, key, value)
-            session.add(existing_entity)
-        else:
-            # If the entity does not exist, insert it
-            session.add(entity)
-        return entity
+        with self.create_managed_session() as session:
+            statement = select(self.model_class).filter_by(**query_by)  # type: ignore
+            _, existing_entity = self._find_by_statement(statement, session)
+            if existing_entity is not None:
+                # If the entity exists, update its attributes
+                for key, value in entity.model_dump().items():
+                    setattr(existing_entity, key, value)
+                session.add(existing_entity)
+            else:
+                # If the entity does not exist, insert it
+                session.add(entity)
+            return entity
