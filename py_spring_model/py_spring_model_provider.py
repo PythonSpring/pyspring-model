@@ -15,6 +15,9 @@ from py_spring_model.core.commons import ApplicationFileGroups, PySpringModelPro
 from py_spring_model.core.model import PySpringModel
 from py_spring_model.repository.repository_base import RepositoryBase
 
+from py_spring_model.spring_model_rest import PySpringModelRestService
+from py_spring_model.spring_model_rest.controller.py_spring_model_rest_controller import PySpringModelRestController
+
 
 class ApplicationContextNotSetError(Exception): ...
 
@@ -131,8 +134,12 @@ class PySpringModelProvider(EntityProvider, Component):
 
 def provide_py_spring_model() -> EntityProvider:
     return PySpringModelProvider(
+        rest_controller_classes=[
+            PySpringModelRestController
+        ],
         component_classes=[
-            PySpringModelProvider
+            PySpringModelProvider,
+            PySpringModelRestService
         ],  # injecting self for getting properties
         properties_classes=[PySpringModelProperties],
     )
