@@ -36,11 +36,14 @@ class PySpringModelRestService(Component):
     def update(self, id: ID, model: ModelT) -> Optional[ModelT]:
         with PySpringModel.create_managed_session() as session:
             model_type = type(model)
+            primary_keys = PySpringModel.get_primary_key_columns(model_type)
             optional_model = session.get(model_type, id) # type: ignore
             if optional_model is None:
                 return
             
             for key, value in model.model_dump().items():
+                if key in primary_keys:
+                    continue
                 setattr(optional_model, key, value)
             session.add(optional_model)
 
@@ -49,8 +52,6 @@ class PySpringModelRestService(Component):
         with PySpringModel.create_managed_session() as session:
             session.query(model_type).filter(model_type.id == id).delete() # type: ignore
             session.commit()
-
-
 
     
     

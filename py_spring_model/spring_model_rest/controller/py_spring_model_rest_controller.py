@@ -83,7 +83,6 @@ class PySpringModelRestController(RestController):
             tags=[resource_name],
         )
         def put(id: int, model: dict[str, Any]):
-            breakpoint()
             model_type = self.rest_service.get_all_models()[resource_name]
             try:
                 current_model = model_type.model_validate(model)

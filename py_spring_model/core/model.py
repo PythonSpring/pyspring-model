@@ -1,10 +1,10 @@
 import contextlib
-from typing import ClassVar, Iterator, Optional
+from typing import ClassVar, Iterator, Optional, Type
 
 from loguru import logger
 from sqlalchemy import Engine, MetaData
 from sqlalchemy.engine.base import Connection
-from sqlmodel import Session, SQLModel
+from sqlmodel import SQLModel
 
 from py_spring_model.core.py_spring_session import PySpringSession
 
@@ -23,6 +23,12 @@ class PySpringModel(SQLModel):
     _metadata: ClassVar[Optional[MetaData]] = None
     _connection: ClassVar[Optional[Connection]] = None
 
+    @classmethod
+    def get_primary_key_columns(cls, table_cls: Type["PySpringModel"]) -> list[str]:
+        metadata = cls.get_metadata()
+        table = metadata.tables[str(table_cls.__tablename__)]
+        return [column.name for column in table.primary_key.columns]
+    
     @classmethod
     def set_metadata(cls, metadata: MetaData) -> None:
         cls._metadata = metadata
