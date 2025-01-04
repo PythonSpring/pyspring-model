@@ -1,3 +1,4 @@
+import copy
 from typing import Any, Callable, Type
 
 from loguru import logger
@@ -58,29 +59,38 @@ class CrudRepositoryImplementationService(Component):
             ) -> Callable[..., Any]:
                 def wrapper(*args, **kwargs) -> Any:
                     if len(query.required_fields) > 0:
-                        if len(query.required_fields) != len(kwargs):
+                        # Check if all required fields are present in kwargs
+                        if set(query.required_fields) != set(kwargs.keys()):
                             raise ValueError(
                                 f"Invalid number of arguments. Expected {query.required_fields}, received {kwargs}."
                             )
-                        for field in query.required_fields:
-                            if field in kwargs:
-                                continue
-                            raise ValueError(f"Missing required field: {field}")
-
-                    logger.info(
-                        f"Executing query: {query}: {kwargs}"
-                    )
+                        
                     # Execute the query
                     result = service.find_by(
                         model_type=model_type,
                         parsed_query=query,
                         **kwargs,
                     )
+                    logger.info(
+                        f"Executing query with params: {kwargs}"
+                    )
                     return result
 
                 wrapper.__annotations__ = current_func.__annotations__
                 return wrapper
+            
+            copy_annotations:dict[str, Any] = copy.deepcopy(current_func.__annotations__)
+            RETURN_KEY = "return"
+            if RETURN_KEY in copy_annotations:
+                copy_annotations.pop(RETURN_KEY)
 
+            if (
+                len(copy_annotations) != len(query.required_fields) 
+                or set(copy_annotations.keys()) != set(query.required_fields)
+            ):
+                raise ValueError(
+                    f"Invalid number of annotations. Expected {query.required_fields}, received {list(copy_annotations.keys())}."
+                )
             # Create a wrapper for the current method and query
             wrapped_method = create_wrapper(self, query)
             logger.info(f"Binding method: {method} to {repository_type}, with query: {query}")
@@ -104,6 +114,22 @@ class CrudRepositoryImplementationService(Component):
             **kwargs: Additional keyword arguments to filter the query.
         Returns:
             Any: The result of the executed query, either a single result or a list of results.
+
+        # Algorithom:
+          Initialize a stack to hold filter conditions
+          For each required field in the parsed query:
+            Get the corresponding attribute from the model type and compare it with the value from kwargs
+              Push the resulting condition onto the stack
+          For each notation in the parsed query:
+              Pop the top two conditions from the stack
+              Combine them using the notation (either AND or OR)
+              Push the resulting condition back onto the stack
+          Initialize a query to select from the model type
+          If there are any conditions left on the stack:
+              Add the top condition to the query as a WHERE clause
+          Create a session using PySpringModel
+          Execute the query and fetch the result (either a single result or all results)
+          Return the result
         """
 
         filter_condition_stack: list[ColumnElement[bool]] = [
@@ -111,8 +137,8 @@ class CrudRepositoryImplementationService(Component):
             for field in parsed_query.required_fields
         ]
         for notation in parsed_query.notations:
-            left_condition = filter_condition_stack.pop(0)
             right_condition = filter_condition_stack.pop(0)
+            left_condition = filter_condition_stack.pop(0)
             match notation:
                 case "_and_":
                     filter_condition_stack.append(
