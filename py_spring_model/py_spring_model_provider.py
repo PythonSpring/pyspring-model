@@ -17,6 +17,7 @@ from py_spring_model.repository.repository_base import RepositoryBase
 
 from py_spring_model.spring_model_rest import PySpringModelRestService
 from py_spring_model.spring_model_rest.controller.py_spring_model_rest_controller import PySpringModelRestController
+from py_spring_model.spring_model_rest.service.curd_repository_implementation_service.crud_repository_implementation_service import CrudRepositoryImplementationService
 
 
 class ApplicationContextNotSetError(Exception): ...
@@ -139,7 +140,8 @@ def provide_py_spring_model() -> EntityProvider:
         ],
         component_classes=[
             PySpringModelProvider,
-            PySpringModelRestService
+            PySpringModelRestService,
+            CrudRepositoryImplementationService
         ],  # injecting self for getting properties
         properties_classes=[PySpringModelProperties],
     )
