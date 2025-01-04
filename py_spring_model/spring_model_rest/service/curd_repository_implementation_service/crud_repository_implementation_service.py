@@ -2,6 +2,7 @@ from typing import Any, Type
 
 from loguru import logger
 from py_spring_core import Component
+from sqlalchemy import ColumnElement
 from sqlalchemy.sql import and_, or_
 from sqlmodel import SQLModel, select
 
@@ -72,13 +73,12 @@ class CrudRepositoryImplementationService(Component):
                             )
 
                     logger.info(
-                        f"Executing query condition: {query.conditions}, is_one_result={query.is_one_result}: {kwargs}"
+                        f"Executing query: {query}: {kwargs}"
                     )
                     # Execute the query
                     result = service.find_by(
                         model_type=model_type,
-                        conditions=query.conditions,
-                        is_one_result=query.is_one_result,
+                        parsed_query=query,
                         **kwargs,
                     )
                     return result
@@ -101,38 +101,43 @@ class CrudRepositoryImplementationService(Component):
     def find_by(
         self,
         model_type: Type[SQLModel],
-        conditions: list[str],
-        is_one_result: bool,
+        parsed_query: Query,
         **kwargs,
     ) -> Any:
         """
-        Dynamically builds a query based on fields and logical operators.
-        :param model: The SQLModel class representing the table.
-        :param conditions: A list of field names and logical operators.
-        :param kwargs: The field values to filter the query.
-        :return: Queryed result from the database.
+        Executes a query based on the provided conditions and field values.    
+        Args:
+            model_type (Type[SQLModel]): The SQLModel class to query.
+            parsed_query (Query): The parsed query object containing the required fields and notations.
+            **kwargs: Additional keyword arguments to filter the query.
+        Returns:
+            Any: The result of the executed query, either a single result or a list of results.
         """
-        filters = []
-        operator = and_  # Default logical operator
 
-        for cond in conditions:
-            if cond == "_and_":
-                operator = and_
-            elif cond == "_or_":
-                operator = or_
-            else:
-                current_query_field = cond
-                filters.append(
-                    getattr(model_type, cond) == kwargs.get(current_query_field)
-                )
-        # Combine filters with the operator
-        if len(filters) > 0:
-            query = select(model_type).where(operator(*filters))
-        else:
-            query = select(model_type)
+        filter_condition_stack: list[ColumnElement[bool]] = [
+            getattr(model_type, field) == kwargs[field]
+            for field in parsed_query.required_fields
+        ]
+        for notation in parsed_query.notations:
+            left_condition = filter_condition_stack.pop(0)
+            right_condition = filter_condition_stack.pop(0)
+            match notation:
+                case "_and_":
+                    filter_condition_stack.append(
+                        and_(left_condition, right_condition)
+                    )
+                case "_or_":
+                    filter_condition_stack.append(
+                        or_(left_condition, right_condition)
+                    )
+        
+        query = select(model_type)
+        if len(filter_condition_stack) > 0:
+            query = query.where(filter_condition_stack.pop())
+
         with PySpringModel.create_session() as session:
             logger.debug(f"Executing query: \n{str(query)}")
-            if is_one_result:
+            if parsed_query.is_one_result:
                 result = session.exec(query).first()
             else:
                 result = session.exec(query).fetchall()

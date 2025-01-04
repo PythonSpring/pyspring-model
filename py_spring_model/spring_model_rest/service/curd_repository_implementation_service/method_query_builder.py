@@ -11,8 +11,9 @@ class Query(BaseModel):
     - `required_fields`: A list of string field names that should be included in the query result.
     """
 
-    conditions: list[str]
+    raw_query_list: list[str]
     is_one_result: bool
+    notations: list[str]
     required_fields: list[str]
 
 
@@ -32,7 +33,9 @@ class MetodQueryBuilder:
     def parse_query(self) -> Query:
         """
         Parse the method name to extract fields and conditions.
-        Example: 'find_by_name_and_age' -> ['name', 'age']
+        Example: 
+            - 'find_by_name_and_age' -> Query(raw_query_list=['name', '_and_', 'age'], is_one_result=True, required_fields=['name', 'age'])
+            - 'find_all_by_name_or_age' -> Query(raw_query_list=['name', '_or_', 'age'], is_one_result=False, required_fields=['name', 'age'])
         """
         is_one = False
         if self.method_name.startswith("get_by"):
@@ -50,15 +53,20 @@ class MetodQueryBuilder:
         if not match:
             raise ValueError(f"Invalid method name: {self.method_name}")
 
-        condition_str = match.group(1)
+        raw_query = match.group(1)
         # Split fields by '_and_' or '_or_' and keep logical operators
-        conditions = re.split(r"(_and_|_or_)", condition_str)
+        raw_query_list = re.split(r"(_and_|_or_)", raw_query)
         return Query(
-            conditions=conditions,
+            raw_query_list= raw_query_list ,
             is_one_result=is_one,
             required_fields=[
-                condition
-                for condition in conditions
-                if condition not in ["_and_", "_or_"]
+                field
+                for field in raw_query_list
+                if field not in ["_and_", "_or_"]
             ],
+            notations=[
+                notation
+                for notation in raw_query_list
+                if notation in ["_and_", "_or_"]
+            ]
         )
