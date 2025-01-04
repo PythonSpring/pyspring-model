@@ -28,7 +28,7 @@ class PySpringModel(SQLModel):
         metadata = cls.get_metadata()
         table = metadata.tables[str(table_cls.__tablename__)]
         return [column.name for column in table.primary_key.columns]
-    
+
     @classmethod
     def set_metadata(cls, metadata: MetaData) -> None:
         cls._metadata = metadata
@@ -75,10 +75,9 @@ class PySpringModel(SQLModel):
         if cls._models is None:
             raise ValueError("[MODEL_LOOKUP NOT SET] Model lookup is not set")
         return {str(_model.__tablename__): _model for _model in cls._models}
-    
+
     def clone(self) -> "PySpringModel":
         return self.model_validate_json(self.model_dump_json())
-
 
     @classmethod
     def create_session(cls) -> PySpringSession:
@@ -100,7 +99,9 @@ class PySpringModel(SQLModel):
             yield session
             logger.info("[MANAGED SESSION COMMIT] Session committing...")
             session.commit()
-            logger.info("[MANAGED SESSION COMMIT] Session committed, refreshing instances...")
+            logger.info(
+                "[MANAGED SESSION COMMIT] Session committed, refreshing instances..."
+            )
             session.refresh_current_session_instances()
             logger.success("[MANAGED SESSION COMMIT] Session committed.")
         except Exception as error:

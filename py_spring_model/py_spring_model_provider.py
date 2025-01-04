@@ -14,10 +14,13 @@ from sqlmodel import SQLModel
 from py_spring_model.core.commons import ApplicationFileGroups, PySpringModelProperties
 from py_spring_model.core.model import PySpringModel
 from py_spring_model.repository.repository_base import RepositoryBase
-
 from py_spring_model.spring_model_rest import PySpringModelRestService
-from py_spring_model.spring_model_rest.controller.py_spring_model_rest_controller import PySpringModelRestController
-from py_spring_model.spring_model_rest.service.curd_repository_implementation_service.crud_repository_implementation_service import CrudRepositoryImplementationService
+from py_spring_model.spring_model_rest.controller.py_spring_model_rest_controller import (
+    PySpringModelRestController,
+)
+from py_spring_model.spring_model_rest.service.curd_repository_implementation_service.crud_repository_implementation_service import (
+    CrudRepositoryImplementationService,
+)
 
 
 class ApplicationContextNotSetError(Exception): ...
@@ -135,13 +138,11 @@ class PySpringModelProvider(EntityProvider, Component):
 
 def provide_py_spring_model() -> EntityProvider:
     return PySpringModelProvider(
-        rest_controller_classes=[
-            PySpringModelRestController
-        ],
+        rest_controller_classes=[PySpringModelRestController],
         component_classes=[
             PySpringModelProvider,
             PySpringModelRestService,
-            CrudRepositoryImplementationService
+            CrudRepositoryImplementationService,
         ],  # injecting self for getting properties
         properties_classes=[PySpringModelProperties],
     )

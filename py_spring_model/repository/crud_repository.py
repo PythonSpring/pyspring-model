@@ -28,8 +28,6 @@ class SessionNotFoundError(Exception): ...
 FT = TypeVar("FT", bound=Callable[..., Any])
 
 
-
-
 class CrudRepository(RepositoryBase, Generic[ID, T]):
     """
     A CRUD (Create, Read, Update, Delete) repository implementation that provides common database operations for a single SQLModel entity.
@@ -100,26 +98,24 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
             statement = select(self.model_class).where(self.model_class.id == id)  # type: ignore
             optional_entity = session.exec(statement).first()
             if optional_entity is None:
-                return 
-        
-            return optional_entity.clone() # type: ignore
+                return
 
-    def find_all_by_ids(
-        self, ids: list[ID]
-    ) -> list[T]:
+            return optional_entity.clone()  # type: ignore
+
+    def find_all_by_ids(self, ids: list[ID]) -> list[T]:
         with self.create_managed_session() as session:
             statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
-            return [entity.clone() for entity in session.exec(statement).all()] # type: ignore
+            return [entity.clone() for entity in session.exec(statement).all()]  # type: ignore
 
     def find_all(self) -> list[T]:
         with self.create_managed_session() as session:
             statement = select(self.model_class)  # type: ignore
-            return [entity.clone() for entity in session.exec(statement).all()] # type: ignore
+            return [entity.clone() for entity in session.exec(statement).all()]  # type: ignore
 
     def save(self, entity: T) -> T:
         with self.create_managed_session() as session:
             session.add(entity)
-        return entity.clone() # type: ignore
+        return entity.clone()  # type: ignore
 
     def save_all(
         self,
@@ -137,9 +133,7 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
             session.delete(optional_intance)
         return True
 
-    def delete_all(
-        self, entities: Iterable[T]
-    ) -> bool:
+    def delete_all(self, entities: Iterable[T]) -> bool:
         with self.create_managed_session() as session:
             for entity in entities:
                 session.delete(entity)
@@ -154,9 +148,7 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
             session.delete(entity)
         return True
 
-    def delete_all_by_ids(
-        self, ids: list[ID]
-    ) -> bool:
+    def delete_all_by_ids(self, ids: list[ID]) -> bool:
         with self.create_managed_session() as session:
             statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
             entities = self._find_by_statement(statement, session)
@@ -164,9 +156,7 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
                 session.delete(entity)
             return True
 
-    def upsert(
-        self, entity: T, query_by: dict[str, Any]
-    ) -> T:
+    def upsert(self, entity: T, query_by: dict[str, Any]) -> T:
         with self.create_managed_session() as session:
             statement = select(self.model_class).filter_by(**query_by)  # type: ignore
             _, existing_entity = self._find_by_statement(statement, session)
