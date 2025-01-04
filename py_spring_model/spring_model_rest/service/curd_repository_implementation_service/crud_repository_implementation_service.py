@@ -1,4 +1,4 @@
-from typing import Any, Type
+from typing import Any, Callable, Type
 
 from loguru import logger
 from py_spring_core import Component
@@ -9,11 +9,8 @@ from sqlmodel import SQLModel, select
 from py_spring_model.core.model import PySpringModel
 from py_spring_model.repository.crud_repository import CrudRepository
 from py_spring_model.spring_model_rest.service.curd_repository_implementation_service.method_query_builder import (
-    MetodQueryBuilder,
-    Query,
+    _MetodQueryBuilder, _Query
 )
-
-
 class CrudRepositoryImplementationService(Component):
     """
     The `CrudRepositoryImplementationService` class is responsible for implementing the query logic for the `CrudRepository` inheritors.
@@ -46,31 +43,29 @@ class CrudRepositoryImplementationService(Component):
             )
         ]
 
-    def _implemenmt_query(self, repository_type: Type[CrudRepository]) -> Any:
+    def _implemenmt_query(self, repository_type: Type[CrudRepository]) -> None:
         methods = self._get_addition_methods(repository_type)
         for method in methods:
-            query_builder = MetodQueryBuilder(method)
+            query_builder = _MetodQueryBuilder(method)
             query = query_builder.parse_query()
             logger.debug(f"Method: {method} has query: {query}")
 
-            _id, model_type = repository_type._get_model_id_type_with_class()
+            _ , model_type = repository_type._get_model_id_type_with_class()
             current_func = getattr(repository_type, method)
 
             def create_wrapper(
-                service: "CrudRepositoryImplementationService", query: Query
-            ) -> Any:
+                service: "CrudRepositoryImplementationService", query: _Query
+            ) -> Callable[..., Any]:
                 def wrapper(*args, **kwargs) -> Any:
                     if len(query.required_fields) > 0:
+                        if len(query.required_fields) != len(kwargs):
+                            raise ValueError(
+                                f"Invalid number of arguments. Expected {query.required_fields}, received {kwargs}."
+                            )
                         for field in query.required_fields:
                             if field in kwargs:
                                 continue
                             raise ValueError(f"Missing required field: {field}")
-
-                    for key, value in kwargs.items():
-                        if value is None:
-                            raise ValueError(
-                                f"Invalid field name: {key}, received None value."
-                            )
 
                     logger.info(
                         f"Executing query: {query}: {kwargs}"
@@ -88,20 +83,17 @@ class CrudRepositoryImplementationService(Component):
 
             # Create a wrapper for the current method and query
             wrapped_method = create_wrapper(self, query)
-            # Bind the wrapper as a method to the repository_type
-            logger.info(
-                f"Binding method: {method} to {repository_type}, with query: {query}"
-            )
+            logger.info(f"Binding method: {method} to {repository_type}, with query: {query}")
             setattr(
                 repository_type,
                 method,
-                wrapped_method.__get__(repository_type, repository_type.__class__),
+                wrapped_method
             )
 
     def find_by(
         self,
         model_type: Type[SQLModel],
-        parsed_query: Query,
+        parsed_query: _Query,
         **kwargs,
     ) -> Any:
         """
@@ -137,10 +129,11 @@ class CrudRepositoryImplementationService(Component):
 
         with PySpringModel.create_session() as session:
             logger.debug(f"Executing query: \n{str(query)}")
-            if parsed_query.is_one_result:
-                result = session.exec(query).first()
-            else:
-                result = session.exec(query).fetchall()
+            result = (
+                session.exec(query).first()
+                if parsed_query.is_one_result 
+                else session.exec(query).fetchall()
+            )
         return result
 
     def post_construct(self) -> None:

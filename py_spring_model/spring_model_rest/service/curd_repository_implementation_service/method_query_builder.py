@@ -3,7 +3,7 @@ import re
 from pydantic import BaseModel
 
 
-class Query(BaseModel):
+class _Query(BaseModel):
     """
     A data model representing a query with the following fields:
     - `conditions`: A list of string conditions that will be used to filter the query.
@@ -17,7 +17,7 @@ class Query(BaseModel):
     required_fields: list[str]
 
 
-class MetodQueryBuilder:
+class _MetodQueryBuilder:
     """
     The `MetodQueryBuilder` class is responsible for parsing a method name and extracting the fields and conditions to be used in a database query.
     It takes a method name as input and returns a `Query` object that contains the parsed information.
@@ -30,7 +30,7 @@ class MetodQueryBuilder:
     def __init__(self, method_name: str) -> None:
         self.method_name = method_name
 
-    def parse_query(self) -> Query:
+    def parse_query(self) -> _Query:
         """
         Parse the method name to extract fields and conditions.
         Example: 
@@ -56,7 +56,7 @@ class MetodQueryBuilder:
         raw_query = match.group(1)
         # Split fields by '_and_' or '_or_' and keep logical operators
         raw_query_list = re.split(r"(_and_|_or_)", raw_query)
-        return Query(
+        return _Query(
             raw_query_list= raw_query_list ,
             is_one_result=is_one,
             required_fields=[
