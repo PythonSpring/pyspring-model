@@ -51,7 +51,7 @@ class UserService:
     user_repository: UserRepository
     
     def get_user_by_name(self, name: str) -> User:
-        return self.user_repository.find_by_name(name)`
+        return self.user_repository.find_by_name(name)
 ```
 1.  Run your application with `PySpringApplication`:
 
