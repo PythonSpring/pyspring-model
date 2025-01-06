@@ -11,10 +11,12 @@ from py_spring_model.core.py_spring_session import PySpringSession
 
 class PySpringModel(SQLModel):
     """
-    Represents a PySpring model, which is a subclass of SQLModel.
-
-    The `engine` class variable is an optional reference to an SQLAlchemy Engine instance,
-    which can be used for database operations related to this model.
+    The `PySpringModel` class is the base class for all models in the PySpring framework. 
+    It provides a set of class-level methods and attributes that are shared across all model classes.
+    
+    The class includes methods for managing the SQLAlchemy engine, metadata, and connection, as well as for creating and managing sessions. 
+    It also includes a `clone` method for creating a copy of the model instance, and a `create_managed_session` context manager for creating a session that is automatically committed and closed.
+    
     """
 
     __table_args__ = {"extend_existing": True}

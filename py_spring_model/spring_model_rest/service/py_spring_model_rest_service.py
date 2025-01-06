@@ -10,6 +10,16 @@ ModelT = TypeVar("ModelT", bound=PySpringModel)
 
 
 class PySpringModelRestService(Component):
+    """
+    This class provides a REST service for interacting with PySpringModel instances. 
+    It includes methods for: 
+     1. Retrieving all available models, 
+     2. Getting a single model by ID, 
+     3. Getting multiple models by ID, getting a paginated list of models, 
+     4. Creating a new model, 
+     5. Updating an existing model, 
+     6. Deleting a model by ID.
+    """     
     def get_all_models(self) -> dict[str, type[PySpringModel]]:
         return PySpringModel.get_model_lookup()
 

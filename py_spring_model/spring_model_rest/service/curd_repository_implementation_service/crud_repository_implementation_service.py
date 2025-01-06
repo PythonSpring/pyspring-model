@@ -10,8 +10,11 @@ from sqlmodel import SQLModel, select
 from py_spring_model.core.model import PySpringModel
 from py_spring_model.repository.crud_repository import CrudRepository
 from py_spring_model.spring_model_rest.service.curd_repository_implementation_service.method_query_builder import (
-    _MetodQueryBuilder, _Query
+    _MetodQueryBuilder,
+    _Query,
 )
+
+
 class CrudRepositoryImplementationService(Component):
     """
     The `CrudRepositoryImplementationService` class is responsible for implementing the query logic for the `CrudRepository` inheritors.
@@ -51,7 +54,7 @@ class CrudRepositoryImplementationService(Component):
             query = query_builder.parse_query()
             logger.debug(f"Method: {method} has query: {query}")
 
-            _ , model_type = repository_type._get_model_id_type_with_class()
+            _, model_type = repository_type._get_model_id_type_with_class()
             current_func = getattr(repository_type, method)
 
             def create_wrapper(
@@ -64,41 +67,38 @@ class CrudRepositoryImplementationService(Component):
                             raise ValueError(
                                 f"Invalid number of arguments. Expected {query.required_fields}, received {kwargs}."
                             )
-                        
+
                     # Execute the query
                     result = service.find_by(
                         model_type=model_type,
                         parsed_query=query,
                         **kwargs,
                     )
-                    logger.info(
-                        f"Executing query with params: {kwargs}"
-                    )
+                    logger.info(f"Executing query with params: {kwargs}")
                     return result
 
                 wrapper.__annotations__ = current_func.__annotations__
                 return wrapper
-            
-            copy_annotations:dict[str, Any] = copy.deepcopy(current_func.__annotations__)
+
+            copy_annotations: dict[str, Any] = copy.deepcopy(
+                current_func.__annotations__
+            )
             RETURN_KEY = "return"
             if RETURN_KEY in copy_annotations:
                 copy_annotations.pop(RETURN_KEY)
 
-            if (
-                len(copy_annotations) != len(query.required_fields) 
-                or set(copy_annotations.keys()) != set(query.required_fields)
-            ):
+            if len(copy_annotations) != len(query.required_fields) or set(
+                copy_annotations.keys()
+            ) != set(query.required_fields):
                 raise ValueError(
                     f"Invalid number of annotations. Expected {query.required_fields}, received {list(copy_annotations.keys())}."
                 )
             # Create a wrapper for the current method and query
             wrapped_method = create_wrapper(self, query)
-            logger.info(f"Binding method: {method} to {repository_type}, with query: {query}")
-            setattr(
-                repository_type,
-                method,
-                wrapped_method
+            logger.info(
+                f"Binding method: {method} to {repository_type}, with query: {query}"
             )
+            setattr(repository_type, method, wrapped_method)
 
     def find_by(
         self,
@@ -107,7 +107,7 @@ class CrudRepositoryImplementationService(Component):
         **kwargs,
     ) -> Any:
         """
-        Executes a query based on the provided conditions and field values.    
+        Executes a query based on the provided conditions and field values.
         Args:
             model_type (Type[SQLModel]): The SQLModel class to query.
             parsed_query (Query): The parsed query object containing the required fields and notations.
@@ -141,14 +141,10 @@ class CrudRepositoryImplementationService(Component):
             left_condition = filter_condition_stack.pop(0)
             match notation:
                 case "_and_":
-                    filter_condition_stack.append(
-                        and_(left_condition, right_condition)
-                    )
+                    filter_condition_stack.append(and_(left_condition, right_condition))
                 case "_or_":
-                    filter_condition_stack.append(
-                        or_(left_condition, right_condition)
-                    )
-        
+                    filter_condition_stack.append(or_(left_condition, right_condition))
+
         query = select(model_type)
         if len(filter_condition_stack) > 0:
             query = query.where(filter_condition_stack.pop())
@@ -157,7 +153,7 @@ class CrudRepositoryImplementationService(Component):
             logger.debug(f"Executing query: \n{str(query)}")
             result = (
                 session.exec(query).first()
-                if parsed_query.is_one_result 
+                if parsed_query.is_one_result
                 else session.exec(query).fetchall()
             )
         return result

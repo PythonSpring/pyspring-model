@@ -33,7 +33,7 @@ class _MetodQueryBuilder:
     def parse_query(self) -> _Query:
         """
         Parse the method name to extract fields and conditions.
-        Example: 
+        Example:
             - 'find_by_name_and_age' -> Query(raw_query_list=['name', '_and_', 'age'], is_one_result=True, required_fields=['name', 'age'])
             - 'find_all_by_name_or_age' -> Query(raw_query_list=['name', '_or_', 'age'], is_one_result=False, required_fields=['name', 'age'])
         """
@@ -56,17 +56,14 @@ class _MetodQueryBuilder:
         raw_query = match.group(1)
         # Split fields by '_and_' or '_or_' and keep logical operators
         raw_query_list = re.split(r"(_and_|_or_)", raw_query)
+
         return _Query(
-            raw_query_list= raw_query_list ,
+            raw_query_list=raw_query_list,
             is_one_result=is_one,
             required_fields=[
-                field
-                for field in raw_query_list
-                if field not in ["_and_", "_or_"]
+                field for field in raw_query_list if field not in ["_and_", "_or_"]
             ],
             notations=[
-                notation
-                for notation in raw_query_list
-                if notation in ["_and_", "_or_"]
-            ]
+                notation for notation in raw_query_list if notation in ["_and_", "_or_"]
+            ],
         )

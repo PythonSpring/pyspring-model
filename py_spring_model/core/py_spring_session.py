@@ -4,6 +4,18 @@ from sqlmodel import Session, SQLModel
 
 
 class PySpringSession(Session):
+    """
+
+    A custom SQLAlchemy Session class that tracks the current session instances and provides methods to manage them.
+    
+    The `PySpringSession` class inherits from the `Session` class and adds the following functionality:
+    
+    - Maintains a list of the current session instances in the `current_session_instance` attribute.
+    - Overrides the `add()` and `add_all()` methods to also add the instances to the `current_session_instance` list.
+    - Provides a `refresh_current_session_instances()` method to refresh all the instances in the `current_session_instance` list.
+    
+    This custom Session class is useful for managing the lifecycle of SQLModel instances within a session, especially when working with complex data models or when you need to keep track of the current session instances.
+    """        
     def __init__(self, *args, **kwargs):
         self.current_session_instance: list[SQLModel] = []
 
