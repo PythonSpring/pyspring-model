@@ -14,12 +14,30 @@ from sqlmodel import SQLModel
 from py_spring_model.core.commons import ApplicationFileGroups, PySpringModelProperties
 from py_spring_model.core.model import PySpringModel
 from py_spring_model.repository.repository_base import RepositoryBase
+from py_spring_model.spring_model_rest import PySpringModelRestService
+from py_spring_model.spring_model_rest.controller.py_spring_model_rest_controller import (
+    PySpringModelRestController,
+)
+from py_spring_model.spring_model_rest.service.curd_repository_implementation_service.crud_repository_implementation_service import (
+    CrudRepositoryImplementationService,
+)
 
 
 class ApplicationContextNotSetError(Exception): ...
 
 
 class PySpringModelProvider(EntityProvider, Component):
+
+    """
+    The `PySpringModelProvider` class is responsible for initializing the PySpring model provider, which includes:
+    - Grouping file paths into class files and model files
+    - Dynamically importing model modules
+    - Creating all SQLModel tables
+    - Setting up the SQLAlchemy engine and connection
+    - Registering PySpring model classes and metadata
+    
+    This class is a key component in the PySpring model infrastructure, handling the setup and initialization of the model-related functionality.
+    """
     props: PySpringModelProperties
 
     def _group_file_paths(self, files: Iterable[str]) -> ApplicationFileGroups:
@@ -131,8 +149,11 @@ class PySpringModelProvider(EntityProvider, Component):
 
 def provide_py_spring_model() -> EntityProvider:
     return PySpringModelProvider(
+        rest_controller_classes=[PySpringModelRestController],
         component_classes=[
-            PySpringModelProvider
+            PySpringModelProvider,
+            PySpringModelRestService,
+            CrudRepositoryImplementationService,
         ],  # injecting self for getting properties
         properties_classes=[PySpringModelProperties],
     )

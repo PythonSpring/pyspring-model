@@ -1,5 +1,5 @@
-from typing import Type, TypeVar
 from contextlib import _GeneratorContextManager
+from typing import Type, TypeVar
 
 from py_spring_core import Component
 from pydantic import BaseModel
@@ -26,6 +26,6 @@ class RepositoryBase(Component):
 
     def _create_session(self) -> Session:
         return PySpringModel.create_session()
-    
+
     def create_managed_session(self) -> _GeneratorContextManager[PySpringSession]:
         return PySpringModel.create_managed_session()

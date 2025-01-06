@@ -1,20 +1,22 @@
 import contextlib
-from typing import ClassVar, Iterator, Optional
+from typing import ClassVar, Iterator, Optional, Type
 
 from loguru import logger
 from sqlalchemy import Engine, MetaData
 from sqlalchemy.engine.base import Connection
-from sqlmodel import Session, SQLModel
+from sqlmodel import SQLModel
 
 from py_spring_model.core.py_spring_session import PySpringSession
 
 
 class PySpringModel(SQLModel):
     """
-    Represents a PySpring model, which is a subclass of SQLModel.
-
-    The `engine` class variable is an optional reference to an SQLAlchemy Engine instance,
-    which can be used for database operations related to this model.
+    The `PySpringModel` class is the base class for all models in the PySpring framework. 
+    It provides a set of class-level methods and attributes that are shared across all model classes.
+    
+    The class includes methods for managing the SQLAlchemy engine, metadata, and connection, as well as for creating and managing sessions. 
+    It also includes a `clone` method for creating a copy of the model instance, and a `create_managed_session` context manager for creating a session that is automatically committed and closed.
+    
     """
 
     __table_args__ = {"extend_existing": True}
@@ -22,6 +24,12 @@ class PySpringModel(SQLModel):
     _models: ClassVar[Optional[list[type["PySpringModel"]]]] = None
     _metadata: ClassVar[Optional[MetaData]] = None
     _connection: ClassVar[Optional[Connection]] = None
+
+    @classmethod
+    def get_primary_key_columns(cls, table_cls: Type["PySpringModel"]) -> list[str]:
+        metadata = cls.get_metadata()
+        table = metadata.tables[str(table_cls.__tablename__)]
+        return [column.name for column in table.primary_key.columns]
 
     @classmethod
     def set_metadata(cls, metadata: MetaData) -> None:
@@ -69,10 +77,9 @@ class PySpringModel(SQLModel):
         if cls._models is None:
             raise ValueError("[MODEL_LOOKUP NOT SET] Model lookup is not set")
         return {str(_model.__tablename__): _model for _model in cls._models}
-    
+
     def clone(self) -> "PySpringModel":
         return self.model_validate_json(self.model_dump_json())
-
 
     @classmethod
     def create_session(cls) -> PySpringSession:
@@ -94,7 +101,9 @@ class PySpringModel(SQLModel):
             yield session
             logger.info("[MANAGED SESSION COMMIT] Session committing...")
             session.commit()
-            logger.info("[MANAGED SESSION COMMIT] Session committed, refreshing instances...")
+            logger.info(
+                "[MANAGED SESSION COMMIT] Session committed, refreshing instances..."
+            )
             session.refresh_current_session_instances()
             logger.success("[MANAGED SESSION COMMIT] Session committed.")
         except Exception as error:
