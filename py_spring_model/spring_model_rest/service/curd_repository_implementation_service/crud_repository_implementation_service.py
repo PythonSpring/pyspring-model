@@ -1,9 +1,12 @@
 import copy
-from typing import Any, Callable, Type
+import functools
+from typing import Any, Callable, ClassVar, Type, TypeVar, Union, cast, get_args, get_origin
+from collections.abc import Iterable
 
 from loguru import logger
 from py_spring_core import Component
-from sqlalchemy import ColumnElement
+from pydantic import BaseModel
+from sqlalchemy import ColumnElement, text
 from sqlalchemy.sql import and_, or_
 from sqlmodel import SQLModel, select
 
@@ -22,6 +25,14 @@ class CrudRepositoryImplementationService(Component):
     The `find_by` method dynamically builds a query based on the provided conditions and field values, and executes the query using the SQLModel session.
     It supports both single-result and multi-result queries.
     """
+
+    skip_functions: ClassVar[set[str]] = set()
+
+
+    @classmethod
+    def add_skip_function(cls, func_name: str) -> None:
+        cls.skip_functions.add(func_name)
+
 
     def __init__(self) -> None:
         self.basic_crud_methods = dir(CrudRepository)
@@ -50,6 +61,11 @@ class CrudRepositoryImplementationService(Component):
     def _implemenmt_query(self, repository_type: Type[CrudRepository]) -> None:
         methods = self._get_addition_methods(repository_type)
         for method in methods:
+            func_name = f"{repository_type.__name__}.{method}"
+            if func_name in self.skip_functions:
+                logger.info(f"Skipping method: {func_name}, as it is marked as Query method.")
+                continue
+
             query_builder = _MetodQueryBuilder(method)
             query = query_builder.parse_query()
             logger.debug(f"Method: {method} has query: {query}")
@@ -161,3 +177,55 @@ class CrudRepositoryImplementationService(Component):
     def post_construct(self) -> None:
         for crud_repository in self.get_all_crud_repository_inheritors():
             self._implemenmt_query(crud_repository)
+
+T = TypeVar("T", bound=BaseModel)
+RT = TypeVar("RT", bound=Union[T, None, list[T]]) # type: ignore
+
+def Query(query_template: str) -> Callable[[Callable[..., RT]], Callable[..., RT]]:
+    def decorator(func: Callable[..., RT]) -> Callable[..., RT]:
+        func_full_name = func.__qualname__
+        CrudRepositoryImplementationService.add_skip_function(func_full_name)
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs) -> RT:
+            nonlocal query_template
+            RETURN = "return"
+
+            annotations = func.__annotations__
+            if RETURN not in annotations:
+                raise ValueError(f"Missing return annotation for function: {func.__name__}")
+            
+            return_type = annotations[RETURN]
+            for key, _ in annotations.items():
+                if key == RETURN:
+                    continue
+                if key not in kwargs or kwargs[key] is None:
+                    raise ValueError(f"Missing required argument: {key}")
+            sql = query_template.format(**kwargs)
+            with PySpringModel.create_session() as session:  # Replace with your actual session mechanism
+                origin = get_origin(return_type)
+                args = get_args(return_type)
+
+                # Handle None or list[T]
+                if type(None) in args:
+                    actual_type = [arg for arg in args if arg is not type(None)].pop()
+                else:
+                    actual_type = args[0]
+    
+                if origin in {list, Iterable} and args:
+                    if not issubclass(actual_type, BaseModel):
+                        raise ValueError(f"Invalid return type: {return_type}, expected Iterable[BaseModel]")
+                    
+                    result = session.execute(text(sql)).fetchall()
+                    return cast(RT, [actual_type.model_validate(row) for row in result])
+                
+                elif issubclass(actual_type, BaseModel):
+                    result = session.execute(text(sql)).first()
+                    if result is None:
+                        return cast(RT, None)
+                    return cast(RT, actual_type.model_validate(result))
+                else:
+                    raise ValueError(f"Invalid return type: {actual_type}")
+
+            return func(*args, **kwargs)  # Fallback explicitly returning the function result
+        return wrapper
+    return decorator
