@@ -1,7 +1,17 @@
 import copy
 import functools
-from typing import Any, Callable, ClassVar, Type, TypeVar, Union, cast, get_args, get_origin
 from collections.abc import Iterable
+from typing import (
+    Any,
+    Callable,
+    ClassVar,
+    Type,
+    TypeVar,
+    Union,
+    cast,
+    get_args,
+    get_origin,
+)
 
 from loguru import logger
 from py_spring_core import Component
@@ -33,7 +43,6 @@ class CrudRepositoryImplementationService(Component):
     def add_skip_function(cls, func_name: str) -> None:
         cls.skip_functions.add(func_name)
 
-
     def __init__(self) -> None:
         self.basic_crud_methods = dir(CrudRepository)
 
@@ -63,7 +72,9 @@ class CrudRepositoryImplementationService(Component):
         for method in methods:
             func_name = f"{repository_type.__name__}.{method}"
             if func_name in self.skip_functions:
-                logger.info(f"Skipping method: {func_name}, as it is marked as Query method.")
+                logger.info(
+                    f"Skipping method: {func_name}, as it is marked as Query method."
+                )
                 continue
 
             query_builder = _MetodQueryBuilder(method)
@@ -179,7 +190,7 @@ class CrudRepositoryImplementationService(Component):
             self._implemenmt_query(crud_repository)
 
 T = TypeVar("T", bound=BaseModel)
-RT = TypeVar("RT", bound=Union[T, None, list[T]]) # type: ignore
+RT = TypeVar("RT", bound=Union[T, None, list[T]])  # type: ignore
 
 def Query(query_template: str) -> Callable[[Callable[..., RT]], Callable[..., RT]]:
     def decorator(func: Callable[..., RT]) -> Callable[..., RT]:
