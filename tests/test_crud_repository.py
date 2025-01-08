@@ -67,6 +67,26 @@ class TestCrudRepository:
         assert email_user.id == 1
         assert email_user.email == "john@example.com"
 
+    def test_find_all_by_query(self, user_repository: UserRepository):
+        john = User(name="John Doe", email="john@example.com")
+        john_2 = User(name="John Doe", email="john2@example.com")
+        user_repository.save(john)
+        user_repository.save(john_2)
+        _, users = user_repository._find_all_by_query({"name": "John Doe"})
+        assert len(users) == 2
+        user_1 = users[0]
+        user_2 = users[1]
+        assert user_1 is not None
+        assert user_1.id == 1
+        assert user_1.name == "John Doe"
+        assert user_1.email == "john@example.com"
+
+        assert user_2 is not None
+        assert user_2.id == 2
+        assert user_2.name == "John Doe"
+        assert user_2.email == "john2@example.com"
+
+
     def test_delete(self, user_repository: UserRepository):
         self.create_test_user(user_repository)
         user = user_repository.find_by_id(1)

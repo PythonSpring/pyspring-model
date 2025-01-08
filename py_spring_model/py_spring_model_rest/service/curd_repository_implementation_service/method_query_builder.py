@@ -38,6 +38,7 @@ class _MetodQueryBuilder:
             - 'find_all_by_name_or_age' -> Query(raw_query_list=['name', '_or_', 'age'], is_one_result=False, required_fields=['name', 'age'])
         """
         is_one = False
+        pattern = ""   
         if self.method_name.startswith("get_by"):
             pattern = r"get_by_(.*)"
             is_one = True
@@ -48,6 +49,10 @@ class _MetodQueryBuilder:
             pattern = r"find_all_by_(.*)"
         elif self.method_name.startswith("get_all_by"):
             pattern = r"get_all_by_(.*)"
+
+        if len(pattern) == 0:
+            raise ValueError(f"Method name must start with 'get_by', 'find_by', 'find_all_by', or 'get_all_by': {self.method_name}")
+
 
         match = re.match(pattern, self.method_name)
         if not match:
