@@ -127,7 +127,7 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
 
     def delete(self, entity: T) -> bool:
         with self.create_managed_session() as session:
-            optional_intance = self._find_by_query(entity.model_dump(), session)
+            _, optional_intance = self._find_by_query(entity.model_dump(), session)
             if optional_intance is None:
                 return False
             session.delete(optional_intance)
@@ -135,14 +135,21 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
 
     def delete_all(self, entities: Iterable[T]) -> bool:
         with self.create_managed_session() as session:
-            for entity in entities:
+            ids = [entity.id for entity in entities] # type: ignore
+            
+            statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
+            _, deleted_entities = self._find_all_by_statement(statement, session)
+            if deleted_entities is None:
+                return False
+            
+            for entity in deleted_entities:
                 session.delete(entity)
 
         return True
 
     def delete_by_id(self, _id: ID) -> bool:
         with self.create_managed_session() as session:
-            entity = self._find_by_query({"id": _id}, session)
+            _, entity = self._find_by_query({"id": _id}, session)
             if entity is None:
                 return False
             session.delete(entity)
@@ -151,8 +158,10 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
     def delete_all_by_ids(self, ids: list[ID]) -> bool:
         with self.create_managed_session() as session:
             statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
-            entities = self._find_by_statement(statement, session)
-            for entity in entities:
+            _, deleted_entities = self._find_all_by_statement(statement, session)
+            if deleted_entities is None:
+                return False
+            for entity in deleted_entities:
                 session.delete(entity)
             return True
 

@@ -99,9 +99,9 @@ class PySpringModel(SQLModel):
         try:
             session = cls.create_session()
             yield session
-            logger.info("[MANAGED SESSION COMMIT] Session committing...")
+            logger.debug("[MANAGED SESSION COMMIT] Session committing...")
             session.commit()
-            logger.info(
+            logger.debug(
                 "[MANAGED SESSION COMMIT] Session committed, refreshing instances..."
             )
             session.refresh_current_session_instances()
@@ -112,5 +112,5 @@ class PySpringModel(SQLModel):
             session.rollback()
             raise
         finally:
-            logger.info("[MANAGED SESSION CLOSE] Session closing...")
+            logger.debug("[MANAGED SESSION CLOSE] Session closing...")
             session.close()
