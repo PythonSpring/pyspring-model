@@ -5,7 +5,7 @@ from py_spring_core import RestController
 from pydantic import BaseModel
 
 from py_spring_model.core.model import PySpringModel
-from py_spring_model.spring_model_rest.service.py_spring_model_rest_service import (
+from py_spring_model.py_spring_model_rest.service.py_spring_model_rest_service import (
     PySpringModelRestService,
 )
 

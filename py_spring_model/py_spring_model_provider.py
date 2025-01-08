@@ -14,11 +14,11 @@ from sqlmodel import SQLModel
 from py_spring_model.core.commons import ApplicationFileGroups, PySpringModelProperties
 from py_spring_model.core.model import PySpringModel
 from py_spring_model.repository.repository_base import RepositoryBase
-from py_spring_model.spring_model_rest import PySpringModelRestService
-from py_spring_model.spring_model_rest.controller.py_spring_model_rest_controller import (
+from py_spring_model.py_spring_model_rest import PySpringModelRestService
+from py_spring_model.py_spring_model_rest.controller.py_spring_model_rest_controller import (
     PySpringModelRestController,
 )
-from py_spring_model.spring_model_rest.service.curd_repository_implementation_service.crud_repository_implementation_service import (
+from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.crud_repository_implementation_service import (
     CrudRepositoryImplementationService,
 )
 

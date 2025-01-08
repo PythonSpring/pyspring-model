@@ -18,11 +18,11 @@ from py_spring_core import Component
 from pydantic import BaseModel
 from sqlalchemy import ColumnElement, text
 from sqlalchemy.sql import and_, or_
-from sqlmodel import SQLModel, select
+from sqlmodel import select
 
 from py_spring_model.core.model import PySpringModel
 from py_spring_model.repository.crud_repository import CrudRepository
-from py_spring_model.spring_model_rest.service.curd_repository_implementation_service.method_query_builder import (
+from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.method_query_builder import (
     _MetodQueryBuilder,
     _Query,
 )
@@ -129,7 +129,7 @@ class CrudRepositoryImplementationService(Component):
 
     def find_by(
         self,
-        model_type: Type[SQLModel],
+        model_type: Type[PySpringModel],
         parsed_query: _Query,
         **kwargs,
     ) -> Any:
