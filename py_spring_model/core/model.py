@@ -1,6 +1,5 @@
 import contextlib
-from typing import ClassVar, Iterator, Optional, Type
-
+from typing import ClassVar, Iterator, Optional, Type, Self
 from loguru import logger
 from sqlalchemy import Engine, MetaData
 from sqlalchemy.engine.base import Connection
@@ -28,7 +27,10 @@ class PySpringModel(SQLModel):
     @classmethod
     def get_primary_key_columns(cls, table_cls: Type["PySpringModel"]) -> list[str]:
         metadata = cls.get_metadata()
-        table = metadata.tables[str(table_cls.__tablename__)]
+        table = metadata.tables.get(str(table_cls.__tablename__))
+        if table is None:
+            raise ValueError(f"Table {table_cls.__tablename__} not found in metadata")
+        
         return [column.name for column in table.primary_key.columns]
 
     @classmethod
@@ -78,7 +80,7 @@ class PySpringModel(SQLModel):
             raise ValueError("[MODEL_LOOKUP NOT SET] Model lookup is not set")
         return {str(_model.__tablename__): _model for _model in cls._models}
 
-    def clone(self) -> "PySpringModel":
+    def clone(self) -> Self:
         return self.model_validate_json(self.model_dump_json())
 
     @classmethod
