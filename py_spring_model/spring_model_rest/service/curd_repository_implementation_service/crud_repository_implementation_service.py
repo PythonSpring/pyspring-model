@@ -235,8 +235,13 @@ def Query(query_template: str) -> Callable[[Callable[..., RT]], Callable[..., RT
                         return cast(RT, None)
                     return cast(RT, actual_type.model_validate(result))
                 else:
-                    raise ValueError(f"Invalid return type: {actual_type}")
-
-            return func(*args, **kwargs)  # Fallback explicitly returning the function result
+                    raise ValueError(f"Invalid return type: {actual_type}") 
         return wrapper
     return decorator
+
+
+def SkipAutoImplmentation(func: Callable[..., RT]) -> Callable[..., RT]:
+    func_name = func.__qualname__
+    logger.info(f"Skipping auto implementation for function: {func_name}")
+    CrudRepositoryImplementationService.add_skip_function(func_name)
+    return func
