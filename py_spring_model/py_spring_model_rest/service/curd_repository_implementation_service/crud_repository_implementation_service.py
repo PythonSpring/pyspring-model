@@ -52,7 +52,7 @@ class CrudRepositoryImplementationService(Component):
             inheritors.append(_cls)
         return inheritors
 
-    def _get_addition_methods(self, crud_repository: Type[CrudRepository]) -> list[str]:
+    def _get_additional_methods(self, crud_repository: Type[CrudRepository]) -> list[str]:
         return [
             method_name
             for method_name in dir(crud_repository)
@@ -68,7 +68,7 @@ class CrudRepositoryImplementationService(Component):
         ]
 
     def _implemenmt_query(self, repository_type: Type[CrudRepository]) -> None:
-        methods = self._get_addition_methods(repository_type)
+        methods = self._get_additional_methods(repository_type)
         for method in methods:
             func_name = f"{repository_type.__name__}.{method}"
             if func_name in self.skip_functions:
@@ -84,29 +84,6 @@ class CrudRepositoryImplementationService(Component):
             _, model_type = repository_type._get_model_id_type_with_class()
             current_func = getattr(repository_type, method)
 
-            def create_wrapper(
-                service: "CrudRepositoryImplementationService", query: _Query
-            ) -> Callable[..., Any]:
-                def wrapper(*args, **kwargs) -> Any:
-                    if len(query.required_fields) > 0:
-                        # Check if all required fields are present in kwargs
-                        if set(query.required_fields) != set(kwargs.keys()):
-                            raise ValueError(
-                                f"Invalid number of arguments. Expected {query.required_fields}, received {kwargs}."
-                            )
-
-                    # Execute the query
-                    result = service.find_by(
-                        model_type=model_type,
-                        parsed_query=query,
-                        **kwargs,
-                    )
-                    logger.info(f"Executing query with params: {kwargs}")
-                    return result
-
-                wrapper.__annotations__ = current_func.__annotations__
-                return wrapper
-
             copy_annotations: dict[str, Any] = copy.deepcopy(
                 current_func.__annotations__
             )
@@ -121,11 +98,32 @@ class CrudRepositoryImplementationService(Component):
                     f"Invalid number of annotations. Expected {query.required_fields}, received {list(copy_annotations.keys())}."
                 )
             # Create a wrapper for the current method and query
-            wrapped_method = create_wrapper(self, query)
+            wrapped_method = self.create_implementation_wrapper(query, model_type, copy_annotations)
             logger.info(
                 f"Binding method: {method} to {repository_type}, with query: {query}"
             )
             setattr(repository_type, method, wrapped_method)
+
+    def create_implementation_wrapper(self, query: _Query, model_type: Type[PySpringModel], original_func_annotations: dict[str, Any]) -> Callable[..., Any]:
+        def wrapper(*args, **kwargs) -> Any:
+            if len(query.required_fields) > 0:
+                # Check if all required fields are present in kwargs
+                if set(query.required_fields) != set(kwargs.keys()):
+                    raise ValueError(
+                        f"Invalid number of arguments. Expected {query.required_fields}, received {kwargs}."
+                    )
+
+            # Execute the query
+            result = self.find_by(
+                model_type=model_type,
+                parsed_query=query,
+                **kwargs,
+            )
+            logger.info(f"Executing query with params: {kwargs}")
+            return result
+
+        wrapper.__annotations__ = original_func_annotations
+        return wrapper
 
     def find_by(
         self,
