@@ -11,6 +11,7 @@ from typing import (
     cast,
     get_args,
     get_origin,
+    ParamSpec
 )
 
 from loguru import logger
@@ -19,6 +20,7 @@ from pydantic import BaseModel
 from sqlalchemy import ColumnElement, text
 from sqlalchemy.sql import and_, or_
 from sqlmodel import select
+from sqlmodel.sql.expression import SelectOfScalar
 
 from py_spring_model.core.model import PySpringModel
 from py_spring_model.repository.crud_repository import CrudRepository
@@ -27,6 +29,7 @@ from py_spring_model.py_spring_model_rest.service.curd_repository_implementation
     _Query,
 )
 
+PySpringModelT = TypeVar("PySpringModelT", bound=PySpringModel)
 
 class CrudRepositoryImplementationService(Component):
     """
@@ -110,55 +113,26 @@ class CrudRepositoryImplementationService(Component):
                 # Check if all required fields are present in kwargs
                 if set(query.required_fields) != set(kwargs.keys()):
                     raise ValueError(
-                        f"Invalid number of arguments. Expected {query.required_fields}, received {kwargs}."
+                        f"Invalid number of keyword arguments. Expected {query.required_fields}, received {kwargs}."
                     )
 
             # Execute the query
-            result = self.find_by(
-                model_type=model_type,
-                parsed_query=query,
-                **kwargs,
-            )
+            sql_statement = self._get_sql_statement(model_type, query, kwargs)
+            result = self._session_execute(sql_statement, query.is_one_result)
             logger.info(f"Executing query with params: {kwargs}")
             return result
 
         wrapper.__annotations__ = original_func_annotations
         return wrapper
-
-    def find_by(
+    
+    def _get_sql_statement(
         self,
-        model_type: Type[PySpringModel],
+        model_type: Type[PySpringModelT],
         parsed_query: _Query,
-        **kwargs,
-    ) -> Any:
-        """
-        Executes a query based on the provided conditions and field values.
-        Args:
-            model_type (Type[SQLModel]): The SQLModel class to query.
-            parsed_query (Query): The parsed query object containing the required fields and notations.
-            **kwargs: Additional keyword arguments to filter the query.
-        Returns:
-            Any: The result of the executed query, either a single result or a list of results.
-
-        # Algorithom:
-          Initialize a stack to hold filter conditions
-          For each required field in the parsed query:
-            Get the corresponding attribute from the model type and compare it with the value from kwargs
-              Push the resulting condition onto the stack
-          For each notation in the parsed query:
-              Pop the top two conditions from the stack
-              Combine them using the notation (either AND or OR)
-              Push the resulting condition back onto the stack
-          Initialize a query to select from the model type
-          If there are any conditions left on the stack:
-              Add the top condition to the query as a WHERE clause
-          Create a session using PySpringModel
-          Execute the query and fetch the result (either a single result or all results)
-          Return the result
-        """
-
+        params: dict[str, Any],
+    ) -> SelectOfScalar[PySpringModelT]:
         filter_condition_stack: list[ColumnElement[bool]] = [
-            getattr(model_type, field) == kwargs[field]
+            getattr(model_type, field) == params[field]
             for field in parsed_query.required_fields
         ]
         for notation in parsed_query.notations:
@@ -173,13 +147,15 @@ class CrudRepositoryImplementationService(Component):
         query = select(model_type)
         if len(filter_condition_stack) > 0:
             query = query.where(filter_condition_stack.pop())
-
+        return query
+    
+    def _session_execute(self, statement: SelectOfScalar, is_one_result: bool) -> Any:
         with PySpringModel.create_session() as session:
-            logger.debug(f"Executing query: \n{str(query)}")
+            logger.debug(f"Executing query: \n{str(statement)}")
             result = (
-                session.exec(query).first()
-                if parsed_query.is_one_result
-                else session.exec(query).fetchall()
+                session.exec(statement).first()
+                if is_one_result
+                else session.exec(statement).fetchall()
             )
         return result
 
@@ -187,11 +163,12 @@ class CrudRepositoryImplementationService(Component):
         for crud_repository in self.get_all_crud_repository_inheritors():
             self._implemenmt_query(crud_repository)
 
+P = ParamSpec("P")
 T = TypeVar("T", bound=BaseModel)
 RT = TypeVar("RT", bound=Union[T, None, list[T]])  # type: ignore
 
-def Query(query_template: str) -> Callable[[Callable[..., RT]], Callable[..., RT]]:
-    def decorator(func: Callable[..., RT]) -> Callable[..., RT]:
+def Query(query_template: str) -> Callable[[Callable[P, RT]], Callable[P, RT]]:
+    def decorator(func: Callable[P, RT]) -> Callable[P, RT]:
         func_full_name = func.__qualname__
         CrudRepositoryImplementationService.add_skip_function(func_full_name)
         @functools.wraps(func)
@@ -204,41 +181,48 @@ def Query(query_template: str) -> Callable[[Callable[..., RT]], Callable[..., RT
                 raise ValueError(f"Missing return annotation for function: {func.__name__}")
             
             return_type = annotations[RETURN]
-            for key, _ in annotations.items():
+            for key, value_type in annotations.items():
                 if key == RETURN:
                     continue
                 if key not in kwargs or kwargs[key] is None:
                     raise ValueError(f"Missing required argument: {key}")
+                if value_type != type(kwargs[key]):
+                    raise TypeError(f"Invalid type for argument {key}. Expected {value_type}, got {type(kwargs[key])}")
+            
             sql = query_template.format(**kwargs)
             with PySpringModel.create_session() as session:  # Replace with your actual session mechanism
-                origin = get_origin(return_type)
-                args = get_args(return_type)
+                reutrn_origin = get_origin(return_type)
+                return_args = get_args(return_type)
+
 
                 # Handle None or list[T]
-                if type(None) in args:
-                    actual_type = [arg for arg in args if arg is not type(None)].pop()
+                if type(None) in return_args:
+                    actual_type = [arg for arg in return_args if arg is not type(None)].pop()
                 else:
-                    actual_type = args[0]
-    
-                if origin in {list, Iterable} and args:
+                    if len(return_args) != 0:
+                        actual_type = return_args[0]
+                    else:
+                        actual_type = return_type
+
+                if reutrn_origin in {list, Iterable} and return_args:
                     if not issubclass(actual_type, BaseModel):
                         raise ValueError(f"Invalid return type: {return_type}, expected Iterable[BaseModel]")
                     
                     result = session.execute(text(sql)).fetchall()
-                    return cast(RT, [actual_type.model_validate(row) for row in result])
+                    return cast(RT, [actual_type.model_validate(row._asdict()) for row in result])
                 
                 elif issubclass(actual_type, BaseModel):
                     result = session.execute(text(sql)).first()
                     if result is None:
                         return cast(RT, None)
-                    return cast(RT, actual_type.model_validate(result))
+                    return cast(RT, actual_type.model_validate(result._asdict()))
                 else:
                     raise ValueError(f"Invalid return type: {actual_type}") 
         return wrapper
     return decorator
 
 
-def SkipAutoImplmentation(func: Callable[..., RT]) -> Callable[..., RT]:
+def SkipAutoImplmentation(func: Callable[P, RT]) -> Callable[P, RT]:
     func_name = func.__qualname__
     logger.info(f"Skipping auto implementation for function: {func_name}")
     CrudRepositoryImplementationService.add_skip_function(func_name)

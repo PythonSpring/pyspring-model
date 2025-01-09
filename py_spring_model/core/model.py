@@ -3,7 +3,7 @@ from typing import ClassVar, Iterator, Optional, Type, Self
 from loguru import logger
 from sqlalchemy import Engine, MetaData
 from sqlalchemy.engine.base import Connection
-from sqlmodel import SQLModel
+from sqlmodel import SQLModel, Field
 
 from py_spring_model.core.py_spring_session import PySpringSession
 
