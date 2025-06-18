@@ -3,10 +3,7 @@ from typing import Iterable, Type, cast
 
 import py_spring_core.core.utils as core_utils
 from loguru import logger
-from py_spring_core import Component, EntityProvider
-from py_spring_core.core.application.context.application_context import (
-    ApplicationContext,
-)
+from py_spring_core import Component, EntityProvider, ApplicationContextRequired
 from sqlalchemy import create_engine
 from sqlalchemy.exc import InvalidRequestError as SqlAlehemyInvalidRequestError
 from sqlmodel import SQLModel
@@ -26,7 +23,7 @@ from py_spring_model.py_spring_model_rest.service.curd_repository_implementation
 class ApplicationContextNotSetError(Exception): ...
 
 
-class PySpringModelProvider(EntityProvider, Component):
+class PySpringModelProvider(EntityProvider, Component, ApplicationContextRequired):
     """
     The `PySpringModelProvider` class is responsible for initializing the PySpring model provider, which includes:
     - Grouping file paths into class files and model files
@@ -38,15 +35,22 @@ class PySpringModelProvider(EntityProvider, Component):
     This class is a key component in the PySpring model infrastructure, handling the setup and initialization of the model-related functionality.
     """
 
-    props: PySpringModelProperties
+    def _get_props(self) -> PySpringModelProperties:
+        app_context =  self.get_application_context()
+        assert app_context is not None
+        props = app_context.get_properties(PySpringModelProperties)
+        assert props is not None
+        return props
 
     def _group_file_paths(self, files: Iterable[str]) -> ApplicationFileGroups:
+        props = self._get_props()
+
         class_files: set[str] = set()
         model_files: set[str] = set()
 
         for file in files:
             py_file_name = self._get_file_base_name(file)
-            if py_file_name in self.props.model_file_postfix_patterns:
+            if py_file_name in props.model_file_postfix_patterns:
                 model_files.add(file)
             if file not in model_files:
                 class_files.add(file)
@@ -76,6 +80,7 @@ class PySpringModelProvider(EntityProvider, Component):
         self._model_classes = self._get_pyspring_model_inheritors()
 
     def _is_from_model_file(self, cls: Type[object]) -> bool:
+        props = self._get_props()
         try:
             source_file_name = inspect.getsourcefile(cls)
         except TypeError as error:
@@ -86,7 +91,7 @@ class PySpringModelProvider(EntityProvider, Component):
         if source_file_name is None:
             return False
         py_file_name = self._get_file_base_name(source_file_name)  # e.g., models.py
-        return py_file_name in self.props.model_file_postfix_patterns
+        return py_file_name in props.model_file_postfix_patterns
 
     def _get_file_base_name(self, file_path: str) -> str:
         return file_path.split("/")[-1]
@@ -126,23 +131,16 @@ class PySpringModelProvider(EntityProvider, Component):
         RepositoryBase.connection = self.sql_engine.connect()
 
     def provider_init(self) -> None:
-        self.app_context: ApplicationContext
+        props = self._get_props()
         logger.info(
             f"[PYSPRING MODEL PROVIDER INIT] Initialize PySpringModelProvider with app context: {self.app_context}"
         )
-        if self.app_context is None:
-            raise ApplicationContextNotSetError(
-                "AppContext is not set by the framework"
-            )
+        app_context = self.get_application_context()
 
-        self.app_file_groups = self._group_file_paths(self.app_context.all_file_paths)
+        self.app_file_groups = self._group_file_paths(app_context.all_file_paths)
         self.sql_engine = create_engine(
-            url=self.props.sqlalchemy_database_uri, echo=True
+            url=props.sqlalchemy_database_uri, echo=True
         )
-        if self.app_context is None:
-            raise ApplicationContextNotSetError(
-                "AppContext is not set by the framework"
-            )
         self._import_model_modules()
         self._create_all_tables()
 
@@ -151,7 +149,6 @@ def provide_py_spring_model() -> EntityProvider:
     return PySpringModelProvider(
         rest_controller_classes=[PySpringModelRestController],
         component_classes=[
-            PySpringModelProvider,
             PySpringModelRestService,
             CrudRepositoryImplementationService,
         ],  # injecting self for getting properties

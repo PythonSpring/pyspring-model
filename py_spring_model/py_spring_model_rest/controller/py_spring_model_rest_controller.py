@@ -17,7 +17,7 @@ class PySpringModelRestController(RestController):
 
     rest_service: PySpringModelRestService
 
-    def register_routes(self) -> None:
+    def post_construct(self) -> None:
         self._register_resource_for_models()
 
     def _register_resource_for_models(self) -> None:
