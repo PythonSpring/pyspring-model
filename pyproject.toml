@@ -9,6 +9,7 @@ dependencies = [
     "py-spring-core>=0.0.13",
     "sqlmodel>=0.0.24",
 ]
+
 requires-python = ">=3.10, <3.13"
 readme = "README.md"
 license = {text = "MIT"}
