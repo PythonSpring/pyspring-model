@@ -6,11 +6,11 @@ authors = [
     {name = "William Chen", email = "william_w_chen@trendmicro.com"},
 ]
 dependencies = [
-    "py-spring-core>=0.0.5",
-    "isort>=5.13.2",
-    "sqlmodel>=0.0.22",
+    "py-spring-core>=0.0.13",
+    "sqlmodel>=0.0.24",
 ]
-requires-python = ">=3.11"
+
+requires-python = ">=3.10, <3.13"
 readme = "README.md"
 license = {text = "MIT"}
 
@@ -30,4 +30,3 @@ dev = [
     "pytest>=8.3.2",
     "pytest-mock>=3.14.0",
 ]
-

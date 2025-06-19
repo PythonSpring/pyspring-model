@@ -1,5 +1,6 @@
 import contextlib
-from typing import ClassVar, Iterator, Optional, Type, Self
+from typing_extensions import Self
+from typing import ClassVar, Iterator, Optional, Type
 from loguru import logger
 from sqlalchemy import Engine, MetaData
 from sqlalchemy.engine.base import Connection

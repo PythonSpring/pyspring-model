@@ -172,7 +172,7 @@ def Query(query_template: str) -> Callable[[Callable[P, RT]], Callable[P, RT]]:
         func_full_name = func.__qualname__
         CrudRepositoryImplementationService.add_skip_function(func_full_name)
         @functools.wraps(func)
-        def wrapper(*args, **kwargs) -> RT:
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> RT:
             nonlocal query_template
             RETURN = "return"
 
