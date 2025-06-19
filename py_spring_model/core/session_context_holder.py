@@ -7,13 +7,42 @@ from py_spring_model.core.model import PySpringModel
 
 def Transactional(func: Callable[..., Any]) -> Callable[..., Any]:
     """
-    A decorator that wraps a function and commits the session if the function is successful.
-    If the function raises an exception, the session is rolled back.
-    The session is then closed.
-    If the function is the outermost function, the session is committed.
-    If the function is not the outermost function, the session is not committed.
-    If the function is not the outermost function, the session is not rolled back.
-    If the function is not the outermost function, the session is not closed.
+    Decorator for managing database transactions in a nested-safe manner.
+
+    This decorator ensures that:
+    - A new session is created only if there is no active session (i.e., outermost transaction).
+    - The session is committed, rolled back, and closed only by the outermost function.
+    - Nested transactional functions share the same session and do not interfere with the commit/rollback behavior.
+
+    Behavior Summary:
+    - If this function is the outermost @Transactional in the call stack:
+        - A new session is created.
+        - On success, the session is committed.
+        - On failure, the session is rolled back.
+        - The session is closed after execution.
+    - If this function is called within an existing transaction:
+        - The existing session is reused.
+        - No commit, rollback, or close is performed (delegated to the outermost function).
+
+    Example:
+        @Transactional
+        def outer_operation():
+            create_user()
+            update_account()
+
+        @Transactional
+        def create_user():
+            db.session.add(User(...))  # Uses same session as outer_operation
+
+        @Transactional
+        def update_account():
+            db.session.add(Account(...))  # Uses same session as outer_operation
+
+        # Only outer_operation will commit or rollback.
+        # If create_user() or update_account() raises an exception,
+        # the whole transaction will be rolled back.
+
+    This design is similar to Spring's @Transactional
     """
     @wraps(func)
     def wrapper(*args, **kwargs):
