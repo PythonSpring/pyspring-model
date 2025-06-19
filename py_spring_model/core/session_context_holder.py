@@ -18,9 +18,9 @@ def Transactional(func):
             result = func(*args, **kwargs)
             session.commit()
             return result
-        except Exception:
+        except Exception as error:
             session.rollback()
-            raise
+            raise error
         finally:
             SessionContextHolder.clear_session()
     return wrapper

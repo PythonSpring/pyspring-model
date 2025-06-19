@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlmodel import Field, SQLModel
 
 from py_spring_model import PySpringModel
+from py_spring_model.core.session_context_holder import SessionContextHolder
 from py_spring_model.repository.crud_repository import CrudRepository
 
 class User(PySpringModel, table=True):
@@ -19,11 +20,13 @@ class TestCrudRepository:
         logger.info("Setting up test environment...")
         self.engine = create_engine("sqlite:///:memory:", echo=True)
         PySpringModel._engine = self.engine
+        SessionContextHolder.clear_session()
         SQLModel.metadata.create_all(self.engine)
 
     def teardown_method(self):
         logger.info("Tearing down test environment...")
         SQLModel.metadata.drop_all(self.engine)
+        SessionContextHolder.clear_session()
 
     @pytest.fixture
     def user_repository(self):
