@@ -168,6 +168,34 @@ T = TypeVar("T", bound=BaseModel)
 RT = TypeVar("RT", bound=Union[T, None, list[T]])  # type: ignore
 
 def Query(query_template: str) -> Callable[[Callable[P, RT]], Callable[P, RT]]:
+    """
+    Decorator to mark a method as a query method.
+    The method will be implemented automatically by the `CrudRepositoryImplementationService`.
+    The method should have the following signature: 
+    ```python
+    @Query("SELECT * FROM users WHERE email = {email}")
+    def get_user_by_email(self, email: str) -> Optional[UserRead]:
+        ...
+    ```
+
+    ```python
+    @Query("SELECT * FROM users WHERE email = {email} AND status = {status}")
+    def get_user_by_email_and_status(self, email: str, status: str) -> Optional[UserRead]:
+        ...
+    ```
+
+    ```python
+    @Query("SELECT * FROM users WHERE email = {email} OR username = {username}")
+    def get_user_by_email_or_username(self, email: str, username: str) -> Optional[UserRead]:
+        ...
+    ```
+
+    ```python
+    @Query("SELECT * FROM users WHERE age > {min_age}")
+    def get_users_by_min_age(self, min_age: int) -> List[UserRead]:
+        ...
+    ```
+    """
     def decorator(func: Callable[P, RT]) -> Callable[P, RT]:
         func_full_name = func.__qualname__
         CrudRepositoryImplementationService.add_skip_function(func_full_name)
@@ -188,8 +216,16 @@ def Query(query_template: str) -> Callable[[Callable[P, RT]], Callable[P, RT]]:
                     raise ValueError(f"Missing required argument: {key}")
                 if value_type != type(kwargs[key]):
                     raise TypeError(f"Invalid type for argument {key}. Expected {value_type}, got {type(kwargs[key])}")
+                
+            processed_kwargs = {}
+            for key, value in kwargs.items():
+                if isinstance(value, str):
+                    original_value = value
+                    processed_kwargs[key] = f"'{original_value}'"
+                else:
+                    processed_kwargs[key] = value
             
-            sql = query_template.format(**kwargs)
+            sql = query_template.format(**processed_kwargs)
             with PySpringModel.create_session() as session:  # Replace with your actual session mechanism
                 reutrn_origin = get_origin(return_type)
                 return_args = get_args(return_type)
@@ -223,6 +259,16 @@ def Query(query_template: str) -> Callable[[Callable[P, RT]], Callable[P, RT]]:
 
 
 def SkipAutoImplmentation(func: Callable[P, RT]) -> Callable[P, RT]:
+    """
+    Decorator to skip the auto implementation for a method.
+    The method will not be implemented automatically by the `CrudRepositoryImplementationService`.
+    The method should have the following signature:
+    ```python
+    @SkipAutoImplmentation
+    def get_user_by_email(self, email: str) -> Optional[UserRead]:
+        ...
+    ```
+    """
     func_name = func.__qualname__
     logger.info(f"Skipping auto implementation for function: {func_name}")
     CrudRepositoryImplementationService.add_skip_function(func_name)
