@@ -147,10 +147,14 @@ class PySpringModelProvider(EntityProvider, Component, ApplicationContextRequire
 
 def provide_py_spring_model() -> EntityProvider:
     return PySpringModelProvider(
-        rest_controller_classes=[PySpringModelRestController],
+        rest_controller_classes=[
+            # PySpringModelRestController
+        ],
         component_classes=[
-            PySpringModelRestService,
-            CrudRepositoryImplementationService,
-        ],  # injecting self for getting properties
-        properties_classes=[PySpringModelProperties],
+            # PySpringModelRestService,
+            # CrudRepositoryImplementationService,
+        ],
+        properties_classes=[
+            PySpringModelProperties
+        ],
     )
