@@ -20,10 +20,10 @@ class UserView(BaseModel):
 
 class UserRepository(CrudRepository[int,User]):
     def find_by_name(self, name: str) -> User: ...
-    @Query("SELECT * FROM user WHERE name = '{name}'")
+    @Query("SELECT * FROM user WHERE name = {name}")
     def query_uery_by_name(self, name: str) -> User: ...
 
-    @Query("SELECT * FROM user WHERE name = '{name}'")
+    @Query("SELECT * FROM user WHERE name = {name}")
     def query_user_view_by_name(self, name: str) -> UserView: ...
     
 

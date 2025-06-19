@@ -151,8 +151,8 @@ def provide_py_spring_model() -> EntityProvider:
             # PySpringModelRestController
         ],
         component_classes=[
-            # PySpringModelRestService,
-            # CrudRepositoryImplementationService,
+            PySpringModelRestService,
+            CrudRepositoryImplementationService,
         ],
         properties_classes=[
             PySpringModelProperties

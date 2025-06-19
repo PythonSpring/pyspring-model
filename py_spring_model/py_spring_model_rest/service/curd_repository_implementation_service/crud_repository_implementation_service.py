@@ -1,6 +1,4 @@
 import copy
-import functools
-from collections.abc import Iterable
 from typing import (
     Any,
     Callable,
@@ -8,16 +6,14 @@ from typing import (
     Type,
     TypeVar,
     Union,
-    cast,
-    get_args,
-    get_origin,
     ParamSpec
 )
 
 from loguru import logger
 from py_spring_core import Component
 from pydantic import BaseModel
-from sqlalchemy import ColumnElement, text
+from enum import Enum
+from sqlalchemy import ColumnElement
 from sqlalchemy.sql import and_, or_
 from sqlmodel import select
 from sqlmodel.sql.expression import SelectOfScalar
@@ -30,6 +26,11 @@ from py_spring_model.py_spring_model_rest.service.curd_repository_implementation
 )
 
 PySpringModelT = TypeVar("PySpringModelT", bound=PySpringModel)
+
+
+class ConditionNotation(str,Enum):
+    AND = "_and_"
+    OR = "_or_"
 
 class CrudRepositoryImplementationService(Component):
     """
@@ -139,9 +140,9 @@ class CrudRepositoryImplementationService(Component):
             right_condition = filter_condition_stack.pop(0)
             left_condition = filter_condition_stack.pop(0)
             match notation:
-                case "_and_":
+                case ConditionNotation.AND:
                     filter_condition_stack.append(and_(left_condition, right_condition))
-                case "_or_":
+                case ConditionNotation.OR:
                     filter_condition_stack.append(or_(left_condition, right_condition))
 
         query = select(model_type)
@@ -167,62 +168,19 @@ P = ParamSpec("P")
 T = TypeVar("T", bound=BaseModel)
 RT = TypeVar("RT", bound=Union[T, None, list[T]])  # type: ignore
 
-def Query(query_template: str) -> Callable[[Callable[P, RT]], Callable[P, RT]]:
-    def decorator(func: Callable[P, RT]) -> Callable[P, RT]:
-        func_full_name = func.__qualname__
-        CrudRepositoryImplementationService.add_skip_function(func_full_name)
-        @functools.wraps(func)
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> RT:
-            nonlocal query_template
-            RETURN = "return"
-
-            annotations = func.__annotations__
-            if RETURN not in annotations:
-                raise ValueError(f"Missing return annotation for function: {func.__name__}")
-            
-            return_type = annotations[RETURN]
-            for key, value_type in annotations.items():
-                if key == RETURN:
-                    continue
-                if key not in kwargs or kwargs[key] is None:
-                    raise ValueError(f"Missing required argument: {key}")
-                if value_type != type(kwargs[key]):
-                    raise TypeError(f"Invalid type for argument {key}. Expected {value_type}, got {type(kwargs[key])}")
-            
-            sql = query_template.format(**kwargs)
-            with PySpringModel.create_session() as session:  # Replace with your actual session mechanism
-                reutrn_origin = get_origin(return_type)
-                return_args = get_args(return_type)
-
-
-                # Handle None or list[T]
-                if type(None) in return_args:
-                    actual_type = [arg for arg in return_args if arg is not type(None)].pop()
-                else:
-                    if len(return_args) != 0:
-                        actual_type = return_args[0]
-                    else:
-                        actual_type = return_type
-
-                if reutrn_origin in {list, Iterable} and return_args:
-                    if not issubclass(actual_type, BaseModel):
-                        raise ValueError(f"Invalid return type: {return_type}, expected Iterable[BaseModel]")
-                    
-                    result = session.execute(text(sql)).fetchall()
-                    return cast(RT, [actual_type.model_validate(row._asdict()) for row in result])
-                
-                elif issubclass(actual_type, BaseModel):
-                    result = session.execute(text(sql)).first()
-                    if result is None:
-                        return cast(RT, None)
-                    return cast(RT, actual_type.model_validate(result._asdict()))
-                else:
-                    raise ValueError(f"Invalid return type: {actual_type}") 
-        return wrapper
-    return decorator
 
 
 def SkipAutoImplmentation(func: Callable[P, RT]) -> Callable[P, RT]:
+    """
+    Decorator to skip the auto implementation for a method.
+    The method will not be implemented automatically by the `CrudRepositoryImplementationService`.
+    The method should have the following signature:
+    ```python
+    @SkipAutoImplmentation
+    def get_user_by_email(self, email: str) -> Optional[UserRead]:
+        ...
+    ```
+    """
     func_name = func.__qualname__
     logger.info(f"Skipping auto implementation for function: {func_name}")
     CrudRepositoryImplementationService.add_skip_function(func_name)
