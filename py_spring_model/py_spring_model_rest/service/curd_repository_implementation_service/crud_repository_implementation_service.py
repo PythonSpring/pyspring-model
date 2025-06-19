@@ -17,6 +17,7 @@ from typing import (
 from loguru import logger
 from py_spring_core import Component
 from pydantic import BaseModel
+from enum import Enum
 from sqlalchemy import ColumnElement, text
 from sqlalchemy.sql import and_, or_
 from sqlmodel import select
@@ -30,6 +31,11 @@ from py_spring_model.py_spring_model_rest.service.curd_repository_implementation
 )
 
 PySpringModelT = TypeVar("PySpringModelT", bound=PySpringModel)
+
+
+class ConditionNotation(Enum):
+    AND = "_and_"
+    OR = "_or_"
 
 class CrudRepositoryImplementationService(Component):
     """
@@ -139,9 +145,9 @@ class CrudRepositoryImplementationService(Component):
             right_condition = filter_condition_stack.pop(0)
             left_condition = filter_condition_stack.pop(0)
             match notation:
-                case "_and_":
+                case ConditionNotation.AND:
                     filter_condition_stack.append(and_(left_condition, right_condition))
-                case "_or_":
+                case ConditionNotation.OR:
                     filter_condition_stack.append(or_(left_condition, right_condition))
 
         query = select(model_type)
