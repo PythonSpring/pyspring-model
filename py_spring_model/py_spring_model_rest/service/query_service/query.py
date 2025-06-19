@@ -23,7 +23,12 @@ RT = TypeVar("RT")
 
 class QueryExecutionService:
     @classmethod
-    def execute_query(cls, query_template: str, func: Callable[P, RT], kwargs: dict) -> RT:
+    def execute_query(cls, 
+        query_template: str, 
+        func: Callable[P, RT], 
+        kwargs: dict, 
+        is_modifying: bool
+    ) -> RT:
         RETURN = "return"
 
         annotations = func.__annotations__
@@ -42,7 +47,7 @@ class QueryExecutionService:
         processed_kwargs = cls._process_kwargs(kwargs)
         
         sql = query_template.format(**processed_kwargs)
-        with PySpringModel.create_session() as session:
+        with PySpringModel.create_managed_session(should_commit=is_modifying) as session:
             reutrn_origin = get_origin(return_type)
             return_args = get_args(return_type)
 
@@ -95,7 +100,7 @@ class QueryExecutionService:
     def _process_single_result(cls, result: Row, actual_type: Type[BaseModel]) -> Optional[BaseModel]:
         return actual_type.model_validate(result._asdict())
 
-def Query(query_template: str) -> Callable[[Callable[P, RT]], Callable[P, RT]]:
+def Query(query_template: str, is_modifying: bool = False) -> Callable[[Callable[P, RT]], Callable[P, RT]]:
     """
     Decorator to mark a method as a query method.
     The method will be implemented automatically by the `CrudRepositoryImplementationService`.
@@ -130,6 +135,6 @@ def Query(query_template: str) -> Callable[[Callable[P, RT]], Callable[P, RT]]:
         @functools.wraps(func)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> RT:
             nonlocal query_template
-            return QueryExecutionService.execute_query(query_template, func, kwargs)
+            return QueryExecutionService.execute_query(query_template, func, kwargs, is_modifying)
         return wrapper
     return decorator
