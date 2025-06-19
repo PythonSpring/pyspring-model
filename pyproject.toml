@@ -6,7 +6,7 @@ authors = [
     {name = "William Chen", email = "william_w_chen@trendmicro.com"},
 ]
 dependencies = [
-    "py-spring-core @ git+https://github.com/PythonSpring/pyspring-core@ef239e71838cd115fba1d22aa8585c4fb60cecfe",
+    "py-spring-core>=0.0.13",
     "sqlmodel>=0.0.24",
 ]
 requires-python = ">=3.10, <3.13"
