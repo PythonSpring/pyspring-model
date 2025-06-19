@@ -91,7 +91,7 @@ class PySpringModel(SQLModel):
 
     @classmethod
     @contextlib.contextmanager
-    def create_managed_session(cls) -> Iterator[PySpringSession]:
+    def create_managed_session(cls, should_commit: bool = True) -> Iterator[PySpringSession]:
         """
         Creates a managed session context that will automatically close the session when the context is exited.
         ## Example Syntax:
@@ -103,7 +103,8 @@ class PySpringModel(SQLModel):
             session = cls.create_session()
             yield session
             logger.debug("[MANAGED SESSION COMMIT] Session committing...")
-            session.commit()
+            if should_commit:
+                session.commit()
             logger.debug(
                 "[MANAGED SESSION COMMIT] Session committed, refreshing instances..."
             )
