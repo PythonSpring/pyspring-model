@@ -528,24 +528,15 @@ class TestQueryModifyingOperations:
             # Count users by age range
             young_count = session.execute(text(
                 "SELECT COUNT(*) as count FROM testuser WHERE age < 25"
-            )).first()
-            assert young_count is not None
-            assert young_count.count is not None
-            young_count = young_count.count
+            )).scalar() or 0
             
             adult_count = session.execute(text(
                 "SELECT COUNT(*) as count FROM testuser WHERE age BETWEEN 25 AND 60"
-            )).first()
-            assert adult_count is not None
-            assert adult_count.count is not None
-            adult_count = adult_count.count
+            )).scalar() or 0
             
             senior_count = session.execute(text(
                 "SELECT COUNT(*) as count FROM testuser WHERE age > 60"
-            )).first()
-            assert senior_count is not None
-            assert senior_count.count is not None
-            senior_count = senior_count.count
+            )).scalar() or 0
             
             assert young_count >= 2  # Young users + potentially others
             assert adult_count >= 2  # Adult users + potentially others  
