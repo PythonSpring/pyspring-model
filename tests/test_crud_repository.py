@@ -57,12 +57,12 @@ class TestCrudRepository:
 
     def test_find_by_query(self, user_repository: UserRepository):
         self.create_test_user(user_repository)
-        _, user = user_repository._find_by_query({"name": "John Doe"})
+        user = user_repository._find_by_query({"name": "John Doe"})
         assert user is not None
         assert user.id == 1
         assert user.name == "John Doe"
 
-        _, email_user = user_repository._find_by_query({"email": "john@example.com"})
+        email_user = user_repository._find_by_query({"email": "john@example.com"})
         assert email_user is not None
         assert email_user.id == 1
         assert email_user.email == "john@example.com"
