@@ -1,28 +1,36 @@
 from contextvars import ContextVar
 from functools import wraps
-from typing import ClassVar, Optional
+from typing import Any, Callable, ClassVar, Optional
 from sqlmodel import Session
 
 from py_spring_model.core.model import PySpringModel
 
-def Transactional(func):
+def Transactional(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     A decorator that wraps a function and commits the session if the function is successful.
     If the function raises an exception, the session is rolled back.
     The session is then closed.
+    If the function is the outermost function, the session is committed.
+    If the function is not the outermost function, the session is not committed.
+    If the function is not the outermost function, the session is not rolled back.
+    If the function is not the outermost function, the session is not closed.
     """
     @wraps(func)
     def wrapper(*args, **kwargs):
+        is_outermost = not SessionContextHolder.has_session()
         session = SessionContextHolder.get_or_create_session()
         try:
             result = func(*args, **kwargs)
-            session.commit()
+            if is_outermost:
+                session.commit()
             return result
         except Exception as error:
-            session.rollback()
+            if is_outermost:
+                session.rollback()
             raise error
         finally:
-            SessionContextHolder.clear_session()
+            if is_outermost:
+                SessionContextHolder.clear_session()
     return wrapper
 
 class SessionContextHolder:
@@ -41,10 +49,14 @@ class SessionContextHolder:
             cls._session.set(session)
             return session
         return optional_session
+    
+    @classmethod
+    def has_session(cls) -> bool:
+        return cls._session.get() is not None
+    
     @classmethod
     def clear_session(cls):
-        optional_session = cls._session.get()
-        if optional_session is None:
-            return
-        optional_session.close()
+        session = cls._session.get()
+        if session is not None:
+            session.close()
         cls._session.set(None)
