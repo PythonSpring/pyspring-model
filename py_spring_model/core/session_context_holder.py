@@ -38,11 +38,9 @@ def Transactional(func: Callable[..., Any]) -> Callable[..., Any]:
         def update_account():
             db.session.add(Account(...))  # Uses same session as outer_operation
 
-        # Only outer_operation will commit or rollback.
-        # If create_user() or update_account() raises an exception,
-        # the whole transaction will be rolled back.
-
-    This design is similar to Spring's @Transactional
+    Only outer_operation will commit or rollback.
+    If create_user() or update_account() raises an exception,
+    the whole transaction will be rolled back.
     """
     @wraps(func)
     def wrapper(*args, **kwargs):
