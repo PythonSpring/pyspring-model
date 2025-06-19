@@ -17,19 +17,19 @@ def Transactional(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     @wraps(func)
     def wrapper(*args, **kwargs):
-        is_outermost = not SessionContextHolder.has_session()
+        is_outermost_transaction = not SessionContextHolder.has_session()
         session = SessionContextHolder.get_or_create_session()
         try:
             result = func(*args, **kwargs)
-            if is_outermost:
+            if is_outermost_transaction:
                 session.commit()
             return result
         except Exception as error:
-            if is_outermost:
+            if is_outermost_transaction:
                 session.rollback()
             raise error
         finally:
-            if is_outermost:
+            if is_outermost_transaction:
                 SessionContextHolder.clear_session()
     return wrapper
 
