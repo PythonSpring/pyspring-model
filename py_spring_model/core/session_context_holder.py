@@ -3,9 +3,8 @@ from enum import IntEnum
 from functools import wraps
 from typing import Any, Callable, ClassVar, Optional
 
-from py_spring_model.core.py_spring_session import PySpringSession
-
 from py_spring_model.core.model import PySpringModel
+from py_spring_model.core.py_spring_session import PySpringSession
 
 class TransactionalDepth(IntEnum):
     OUTERMOST = 1
@@ -132,3 +131,7 @@ class SessionContextHolder:
             session.close()
         cls._session.set(None)
         cls._session_depth.set(TransactionalDepth.ON_EXIT.value)
+
+    @classmethod
+    def is_transaction_managed(cls) -> bool:
+        return cls._session_depth.get() > TransactionalDepth.OUTERMOST.value

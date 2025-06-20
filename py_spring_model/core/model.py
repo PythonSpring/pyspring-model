@@ -1,5 +1,4 @@
 import contextlib
-from typing_extensions import Self
 from typing import ClassVar, Iterator, Optional, Type
 from loguru import logger
 from sqlalchemy import Engine, MetaData
@@ -81,7 +80,7 @@ class PySpringModel(SQLModel):
             raise ValueError("[MODEL_LOOKUP NOT SET] Model lookup is not set")
         return {str(_model.__tablename__): _model for _model in cls._models}
 
-    def clone(self) -> Self:
+    def clone(self) -> "PySpringModel":
         return self.model_validate_json(self.model_dump_json())
 
     @classmethod
@@ -105,11 +104,7 @@ class PySpringModel(SQLModel):
             logger.debug("[MANAGED SESSION COMMIT] Session committing...")
             if should_commit:
                 session.commit()
-            logger.debug(
-                "[MANAGED SESSION COMMIT] Session committed, refreshing instances..."
-            )
-            session.refresh_current_session_instances()
-            logger.success("[MANAGED SESSION COMMIT] Session committed.")
+                logger.success("[MANAGED SESSION COMMIT] Session committed.")
         except Exception as error:
             logger.error(error)
             logger.error("[MANAGED SESSION ROLLBACK] Session rolling back...")

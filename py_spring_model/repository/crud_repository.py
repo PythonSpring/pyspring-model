@@ -59,6 +59,7 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
     def _get_model_id_type_with_class(cls) -> tuple[Type[ID], Type[T]]:
         return get_args(tp=cls.__mro__[0].__orig_bases__[0])
 
+    @Transactional
     def _find_by_statement(
         self,
         statement: Union[Select, SelectOfScalar],
@@ -67,7 +68,7 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
 
         return session.exec(statement).first()
 
-
+    @Transactional
     def _find_by_query(
         self,
         query_by: dict[str, Any],
@@ -76,6 +77,8 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
         statement = select(self.model_class).filter_by(**query_by)
         return session.exec(statement).first()
 
+
+    @Transactional
     def _find_all_by_query(
         self,
         query_by: dict[str, Any],
@@ -84,6 +87,7 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
         statement = select(self.model_class).filter_by(**query_by)
         return session, list(session.exec(statement).fetchall())
 
+    @Transactional
     def _find_all_by_statement(
         self,
         statement: Union[Select, SelectOfScalar],
@@ -91,6 +95,7 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
         session = SessionContextHolder.get_or_create_session()
         return list(session.exec(statement).fetchall())
 
+    @Transactional
     def find_by_id(self, id: ID) -> Optional[T]:
         session = SessionContextHolder.get_or_create_session()
         statement = select(self.model_class).where(self.model_class.id == id)  # type: ignore
@@ -99,11 +104,14 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
             return
 
         return optional_entity
+    
+    @Transactional
     def find_all_by_ids(self, ids: list[ID]) -> list[T]:
         session = SessionContextHolder.get_or_create_session()
         statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
         return [entity for entity in session.exec(statement).all()]  # type: ignore
 
+    @Transactional
     def find_all(self) -> list[T]:
         session = SessionContextHolder.get_or_create_session()
         statement = select(self.model_class)  # type: ignore

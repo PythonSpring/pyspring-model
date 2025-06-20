@@ -136,3 +136,16 @@ class TestCrudRepository:
         assert new_user is not None
         assert new_user.name == "John Doe"
         assert new_user.email == "john@example.com"
+
+    def test_update_user(self, user_repository: UserRepository):
+        self.create_test_user(user_repository)
+        user = user_repository.find_by_id(1)
+        assert user is not None
+        user.name = "William Chen"
+        user.email = "william.chen@example.com"
+        user_repository.save(user)
+        updated_user = user_repository.find_by_id(1)
+        assert updated_user is not None
+        assert updated_user.name == "William Chen"
+        assert updated_user.email == "william.chen@example.com"
+        
