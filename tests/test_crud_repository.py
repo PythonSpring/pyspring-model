@@ -148,4 +148,13 @@ class TestCrudRepository:
         assert updated_user is not None
         assert updated_user.name == "William Chen"
         assert updated_user.email == "william.chen@example.com"
-        
+
+    def test_delete_user_with_user_found(self, user_repository: UserRepository):
+        self.create_test_user(user_repository)
+        user = user_repository.find_by_id(1)
+        assert user is not None
+        assert user_repository.delete(user)
+        assert user_repository.find_by_id(1) is None
+
+    def test_delete_user_with_user_not_found(self, user_repository: UserRepository):
+        assert user_repository.delete(User(id=1, name="John Doe", email="john@example.com")) is False

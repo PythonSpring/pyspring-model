@@ -135,10 +135,10 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
     @Transactional
     def delete(self, entity: T) -> bool:
         session = SessionContextHolder.get_or_create_session()
-        optional_intance = self._find_by_query(entity.model_dump())
-        if optional_intance is None:
+        optional_instance = self._find_by_query(entity.model_dump())
+        if optional_instance is None:
             return False
-        session.delete(optional_intance)
+        session.delete(optional_instance)
         return True
 
     @Transactional

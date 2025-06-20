@@ -1,7 +1,7 @@
 from contextvars import ContextVar
 from enum import IntEnum
 from functools import wraps
-from typing import Any, Callable, ClassVar, Optional
+from typing import Any, Callable, ClassVar, Optional, ParamSpec, TypeVar
 
 from py_spring_model.core.model import PySpringModel
 from py_spring_model.core.py_spring_session import PySpringSession
@@ -10,7 +10,11 @@ class TransactionalDepth(IntEnum):
     OUTERMOST = 1
     ON_EXIT = 0
 
-def Transactional(func: Callable[..., Any]) -> Callable[..., Any]:
+
+P = ParamSpec("P")
+RT = TypeVar("RT")
+
+def Transactional(func: Callable[P, RT]) -> Callable[P, RT]:
     """
     Decorator for managing database transactions in a nested-safe manner.
 
@@ -48,7 +52,7 @@ def Transactional(func: Callable[..., Any]) -> Callable[..., Any]:
     the whole transaction will be rolled back.
     """
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> RT:
         # Increment session depth and get session
         session_depth = SessionContextHolder.enter_session()
         session = SessionContextHolder.get_or_create_session()
