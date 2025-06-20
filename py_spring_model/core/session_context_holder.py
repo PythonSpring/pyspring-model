@@ -1,10 +1,15 @@
 from contextvars import ContextVar
+from enum import IntEnum
 from functools import wraps
 from typing import Any, Callable, ClassVar, Optional
 
 from py_spring_model.core.py_spring_session import PySpringSession
 
 from py_spring_model.core.model import PySpringModel
+
+class TransactionalDepth(IntEnum):
+    OUTERMOST = 1
+    ON_EXIT = 0
 
 def Transactional(func: Callable[..., Any]) -> Callable[..., Any]:
     """
@@ -45,30 +50,34 @@ def Transactional(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     @wraps(func)
     def wrapper(*args, **kwargs):
-        is_outermost_transaction = not SessionContextHolder.has_session()
+        # Increment session depth and get session
+        session_depth = SessionContextHolder.enter_session()
         session = SessionContextHolder.get_or_create_session()
         try:
             result = func(*args, **kwargs)
-            if is_outermost_transaction:
+            # Only commit at the outermost level (session_depth == 1)
+            if session_depth == TransactionalDepth.OUTERMOST.value:
                 session.commit()
             return result
         except Exception as error:
-            if is_outermost_transaction:
+            # Only rollback at the outermost level (session_depth == 1)
+            if session_depth == TransactionalDepth.OUTERMOST.value:
                 session.rollback()
             raise error
         finally:
-            if is_outermost_transaction:
-                SessionContextHolder.clear_session()
+            # Decrement depth and clean up session if needed
+            SessionContextHolder.exit_session()
     return wrapper
 
 class SessionContextHolder:
     """
-    A context holder for the session.
+    A context holder for the session with explicit depth tracking.
     This is used to store the session in a context variable so that it can be accessed by the query service.
-    This is useful for the query service to be able to access the session without having to pass it in as an argument.
-    This is also useful for the query service to be able to access the session without having to pass it in as an argument.
+    The depth counter ensures that only the outermost transaction manages commit/rollback operations.
     """
     _session: ClassVar[ContextVar[Optional[PySpringSession]]] = ContextVar("session", default=None)
+    _session_depth: ClassVar[ContextVar[int]] = ContextVar("session_depth", default=0)
+    
     @classmethod
     def get_or_create_session(cls) -> PySpringSession:
         optional_session = cls._session.get()
@@ -83,8 +92,43 @@ class SessionContextHolder:
         return cls._session.get() is not None
     
     @classmethod
+    def get_session_depth(cls) -> int:
+        """Get the current session depth."""
+        return cls._session_depth.get()
+    
+    @classmethod
+    def enter_session(cls) -> int:
+        """
+        Enter a new session context and increment the depth counter.
+        Returns the new depth level.
+        """
+        current_depth = cls._session_depth.get()
+        new_depth = current_depth + 1
+        cls._session_depth.set(new_depth)
+        return new_depth
+    
+    @classmethod
+    def exit_session(cls) -> int:
+        """
+        Exit the current session context and decrement the depth counter.
+        If depth reaches 0, clear the session.
+        Returns the new depth level.
+        """
+        current_depth = cls._session_depth.get()
+        new_depth = max(0, current_depth - 1)  # Prevent negative depth
+        cls._session_depth.set(new_depth)
+        
+        # Clear session only when depth reaches 0 (outermost level)
+        if new_depth == 0:
+            cls.clear_session()
+        
+        return new_depth
+    
+    @classmethod
     def clear_session(cls):
+        """Clear the session and reset depth to 0."""
         session = cls._session.get()
         if session is not None:
             session.close()
         cls._session.set(None)
+        cls._session_depth.set(TransactionalDepth.ON_EXIT.value)
