@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlmodel import SQLModel
 from py_spring_model import PySpringModel, Field, CrudRepository, Query
+from py_spring_model.core.session_context_holder import SessionContextHolder
 from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.crud_repository_implementation_service import CrudRepositoryImplementationService
 from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.method_query_builder import _MetodQueryBuilder
 
@@ -32,11 +33,13 @@ class TestQuery:
         logger.info("Setting up test environment...")
         self.engine = create_engine("sqlite:///:memory:", echo=True)
         PySpringModel._engine = self.engine
+        SessionContextHolder.clear_session()
         SQLModel.metadata.create_all(self.engine)
 
     def teardown_method(self):
         logger.info("Tearing down test environment...")
         SQLModel.metadata.drop_all(self.engine)
+        SessionContextHolder.clear_session()
 
     @pytest.fixture
     def user_repository(self):

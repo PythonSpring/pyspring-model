@@ -16,6 +16,7 @@ from sqlmodel import Session, select
 from sqlmodel.sql.expression import Select, SelectOfScalar
 
 from py_spring_model.core.model import PySpringModel
+from py_spring_model.core.session_context_holder import SessionContextHolder, Transactional
 from py_spring_model.repository.repository_base import RepositoryBase
 
 T = TypeVar("T", bound=PySpringModel)
@@ -58,123 +59,135 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
     def _get_model_id_type_with_class(cls) -> tuple[Type[ID], Type[T]]:
         return get_args(tp=cls.__mro__[0].__orig_bases__[0])
 
+    @Transactional
     def _find_by_statement(
         self,
         statement: Union[Select, SelectOfScalar],
-        session: Optional[Session] = None,
-    ) -> tuple[Session, Optional[T]]:
-        session = session or self._create_session()
+    ) -> Optional[T]:
+        session = SessionContextHolder.get_or_create_session()
 
-        return session, session.exec(statement).first()
+        return session.exec(statement).first()
 
+    @Transactional
     def _find_by_query(
         self,
         query_by: dict[str, Any],
-        session: Optional[Session] = None,
-    ) -> tuple[Session, Optional[T]]:
-        session = session or self._create_session()
+    ) -> Optional[T]:
+        session = SessionContextHolder.get_or_create_session()
         statement = select(self.model_class).filter_by(**query_by)
-        return session, session.exec(statement).first()
+        return session.exec(statement).first()
 
+
+    @Transactional
     def _find_all_by_query(
         self,
         query_by: dict[str, Any],
-        session: Optional[Session] = None,
     ) -> tuple[Session, list[T]]:
-        session = session or self._create_session()
+        session = SessionContextHolder.get_or_create_session()
         statement = select(self.model_class).filter_by(**query_by)
         return session, list(session.exec(statement).fetchall())
 
+    @Transactional
     def _find_all_by_statement(
         self,
         statement: Union[Select, SelectOfScalar],
-        session: Optional[Session] = None,
-    ) -> tuple[Session, list[T]]:
-        session = session or self._create_session()
-        return session, list(session.exec(statement).fetchall())
+    ) -> list[T]:
+        session = SessionContextHolder.get_or_create_session()
+        return list(session.exec(statement).fetchall())
 
+    @Transactional
     def find_by_id(self, id: ID) -> Optional[T]:
-        with self.create_managed_session() as session:
-            statement = select(self.model_class).where(self.model_class.id == id)  # type: ignore
-            optional_entity = session.exec(statement).first()
-            if optional_entity is None:
-                return
+        session = SessionContextHolder.get_or_create_session()
+        statement = select(self.model_class).where(self.model_class.id == id)  # type: ignore
+        optional_entity = session.exec(statement).first()
+        if optional_entity is None:
+            return
 
-            return optional_entity.clone()  # type: ignore
-
+        return optional_entity
+    
+    @Transactional
     def find_all_by_ids(self, ids: list[ID]) -> list[T]:
-        with self.create_managed_session() as session:
-            statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
-            return [entity.clone() for entity in session.exec(statement).all()]  # type: ignore
+        session = SessionContextHolder.get_or_create_session()
+        statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
+        return [entity for entity in session.exec(statement).all()]  # type: ignore
 
+    @Transactional
     def find_all(self) -> list[T]:
-        with self.create_managed_session() as session:
-            statement = select(self.model_class)  # type: ignore
-            return [entity.clone() for entity in session.exec(statement).all()]  # type: ignore
+        session = SessionContextHolder.get_or_create_session()
+        statement = select(self.model_class)  # type: ignore
+        return [entity for entity in session.exec(statement).all()]  # type: ignore
 
+    @Transactional
     def save(self, entity: T) -> T:
-        with self.create_managed_session() as session:
-            session.add(entity)
-        return entity.clone()  # type: ignore
+        session = SessionContextHolder.get_or_create_session()
+        session.add(entity)
+        return entity
 
+    @Transactional
     def save_all(
         self,
         entities: Iterable[T],
     ) -> bool:
-        with self.create_managed_session() as session:
-            session.add_all(entities)
+        session = SessionContextHolder.get_or_create_session()
+        session.add_all(entities)
         return True
 
+    @Transactional
     def delete(self, entity: T) -> bool:
-        with self.create_managed_session() as session:
-            _, optional_intance = self._find_by_query(entity.model_dump(), session)
-            if optional_intance is None:
-                return False
-            session.delete(optional_intance)
+        session = SessionContextHolder.get_or_create_session()
+        optional_instance = self._find_by_query(entity.model_dump())
+        if optional_instance is None:
+            return False
+        session.delete(optional_instance)
         return True
 
+    @Transactional
     def delete_all(self, entities: Iterable[T]) -> bool:
-        with self.create_managed_session() as session:
-            ids = [entity.id for entity in entities] # type: ignore
-            
-            statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
-            _, deleted_entities = self._find_all_by_statement(statement, session)
-            if deleted_entities is None:
-                return False
-            
-            for entity in deleted_entities:
-                session.delete(entity)
+        session = SessionContextHolder.get_or_create_session()
+        ids = [entity.id for entity in entities] # type: ignore
+        
+        statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
+        deleted_entities = self._find_all_by_statement(statement)
+        if deleted_entities is None:
+            return False
+        
+        for entity in deleted_entities:
+            session.delete(entity)
 
         return True
 
+
+    @Transactional
     def delete_by_id(self, _id: ID) -> bool:
-        with self.create_managed_session() as session:
-            _, entity = self._find_by_query({"id": _id}, session)
-            if entity is None:
-                return False
+        session = SessionContextHolder.get_or_create_session()
+        entity = self._find_by_query({"id": _id})
+        if entity is None:
+            return False
+        session.delete(entity)
+        return True
+
+    @Transactional
+    def delete_all_by_ids(self, ids: list[ID]) -> bool:
+        session = SessionContextHolder.get_or_create_session()
+        statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
+        deleted_entities = self._find_all_by_statement(statement)
+        if deleted_entities is None:
+            return False
+        for entity in deleted_entities:
             session.delete(entity)
         return True
 
-    def delete_all_by_ids(self, ids: list[ID]) -> bool:
-        with self.create_managed_session() as session:
-            statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
-            _, deleted_entities = self._find_all_by_statement(statement, session)
-            if deleted_entities is None:
-                return False
-            for entity in deleted_entities:
-                session.delete(entity)
-            return True
-
+    @Transactional
     def upsert(self, entity: T, query_by: dict[str, Any]) -> T:
-        with self.create_managed_session() as session:
-            statement = select(self.model_class).filter_by(**query_by)  # type: ignore
-            _, existing_entity = self._find_by_statement(statement, session)
-            if existing_entity is not None:
-                # If the entity exists, update its attributes
-                for key, value in entity.model_dump().items():
-                    setattr(existing_entity, key, value)
-                session.add(existing_entity)
-            else:
-                # If the entity does not exist, insert it
-                session.add(entity)
-            return entity
+        session = SessionContextHolder.get_or_create_session()
+        statement = select(self.model_class).filter_by(**query_by)  # type: ignore
+        existing_entity = self._find_by_statement(statement)
+        if existing_entity is not None:
+            # If the entity exists, update its attributes
+            for key, value in entity.model_dump().items():
+                setattr(existing_entity, key, value)
+            session.add(existing_entity)
+        else:
+            # If the entity does not exist, insert it
+            session.add(entity)
+        return entity

@@ -6,6 +6,7 @@ from typing import Optional, List
 from unittest.mock import patch, MagicMock
 
 from py_spring_model import PySpringModel
+from py_spring_model.core.session_context_holder import SessionContextHolder
 from py_spring_model.py_spring_model_rest.service.query_service.query import Query, QueryExecutionService
 from py_spring_model.repository.crud_repository import CrudRepository
 
@@ -88,14 +89,17 @@ class TestQueryModifyingOperations:
         PySpringModel.set_engine(self.engine)
         PySpringModel.set_metadata(SQLModel.metadata)
         PySpringModel.set_models([TestUser])
+        SessionContextHolder.clear_session()
         SQLModel.metadata.create_all(self.engine)
         self.repository = TestUserRepository()
+       
         self.repository.insert_user_with_commit(name="John Doe", email="john@example.com", age=30)
 
     def teardown_method(self):
         """Clean up test environment"""
         logger.info("Tearing down test environment...")
         SQLModel.metadata.drop_all(self.engine)
+        SessionContextHolder.clear_session()
     
     def test_insert_with_commit_true(self):
         """Test INSERT operation with is_modifying=True (should commit)"""
