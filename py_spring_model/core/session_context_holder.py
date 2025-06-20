@@ -119,7 +119,7 @@ class SessionContextHolder:
         cls._session_depth.set(new_depth)
         
         # Clear session only when depth reaches 0 (outermost level)
-        if new_depth == 0:
+        if new_depth == TransactionalDepth.ON_EXIT.value:
             cls.clear_session()
         
         return new_depth
