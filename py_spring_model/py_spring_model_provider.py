@@ -114,6 +114,11 @@ class PySpringModelProvider(EntityProvider, Component, ApplicationContextRequire
         return set(class_name_with_class_map.values())
 
     def _create_all_tables(self) -> None:
+        props = self._get_props()
+        if not props.create_all_tables:
+            logger.info("[SQLMODEL TABLE CREATION] Skip creating all tables, set create_all_tables to True to enable.")
+            return
+
         table_names = SQLModel.metadata.tables.keys()
         logger.success(
             f"[SQLMODEL TABLE CREATION] Create all SQLModel tables, engine url: {self.sql_engine.url}, tables: {', '.join(table_names)}"
