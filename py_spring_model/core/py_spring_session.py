@@ -1,5 +1,6 @@
 from typing import Iterable
 
+from loguru import logger
 from sqlmodel import Session, SQLModel
 
 
@@ -33,3 +34,12 @@ class PySpringSession(Session):
     def refresh_current_session_instances(self) -> None:
         for instance in self.current_session_instance:
             self.refresh(instance)
+
+    def commit(self) -> None:
+        # Import here to avoid circular import
+        from py_spring_model.core.session_context_holder import SessionContextHolder
+        if SessionContextHolder.is_transaction_managed():
+            logger.warning("Commiting a transaction that is currently being managed by the outermost transaction is strongly discouraged...")
+            return
+        super().commit()
+        self.refresh_current_session_instances()

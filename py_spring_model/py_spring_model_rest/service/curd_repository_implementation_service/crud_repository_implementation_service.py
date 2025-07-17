@@ -19,6 +19,7 @@ from sqlmodel import select
 from sqlmodel.sql.expression import SelectOfScalar
 
 from py_spring_model.core.model import PySpringModel
+from py_spring_model.core.session_context_holder import SessionContextHolder, Transactional
 from py_spring_model.repository.crud_repository import CrudRepository
 from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.method_query_builder import (
     _MetodQueryBuilder,
@@ -150,14 +151,15 @@ class CrudRepositoryImplementationService(Component):
             query = query.where(filter_condition_stack.pop())
         return query
     
+    @Transactional
     def _session_execute(self, statement: SelectOfScalar, is_one_result: bool) -> Any:
-        with PySpringModel.create_session() as session:
-            logger.debug(f"Executing query: \n{str(statement)}")
-            result = (
-                session.exec(statement).first()
-                if is_one_result
-                else session.exec(statement).fetchall()
-            )
+        session = SessionContextHolder.get_or_create_session()
+        logger.debug(f"Executing query: \n{str(statement)}")
+        result = (
+            session.exec(statement).first()
+            if is_one_result
+            else session.exec(statement).fetchall()
+        )
         return result
 
     def post_construct(self) -> None:

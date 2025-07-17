@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlmodel import Field, SQLModel
 
 from py_spring_model import PySpringModel
+from py_spring_model.core.session_context_holder import SessionContextHolder
 from py_spring_model.repository.crud_repository import CrudRepository
 
 class User(PySpringModel, table=True):
@@ -19,11 +20,13 @@ class TestCrudRepository:
         logger.info("Setting up test environment...")
         self.engine = create_engine("sqlite:///:memory:", echo=True)
         PySpringModel._engine = self.engine
+        SessionContextHolder.clear_session()
         SQLModel.metadata.create_all(self.engine)
 
     def teardown_method(self):
         logger.info("Tearing down test environment...")
         SQLModel.metadata.drop_all(self.engine)
+        SessionContextHolder.clear_session()
 
     @pytest.fixture
     def user_repository(self):
@@ -57,12 +60,12 @@ class TestCrudRepository:
 
     def test_find_by_query(self, user_repository: UserRepository):
         self.create_test_user(user_repository)
-        _, user = user_repository._find_by_query({"name": "John Doe"})
+        user = user_repository._find_by_query({"name": "John Doe"})
         assert user is not None
         assert user.id == 1
         assert user.name == "John Doe"
 
-        _, email_user = user_repository._find_by_query({"email": "john@example.com"})
+        email_user = user_repository._find_by_query({"email": "john@example.com"})
         assert email_user is not None
         assert email_user.id == 1
         assert email_user.email == "john@example.com"
@@ -133,3 +136,25 @@ class TestCrudRepository:
         assert new_user is not None
         assert new_user.name == "John Doe"
         assert new_user.email == "john@example.com"
+
+    def test_update_user(self, user_repository: UserRepository):
+        self.create_test_user(user_repository)
+        user = user_repository.find_by_id(1)
+        assert user is not None
+        user.name = "William Chen"
+        user.email = "william.chen@example.com"
+        user_repository.save(user)
+        updated_user = user_repository.find_by_id(1)
+        assert updated_user is not None
+        assert updated_user.name == "William Chen"
+        assert updated_user.email == "william.chen@example.com"
+
+    def test_delete_user_with_user_found(self, user_repository: UserRepository):
+        self.create_test_user(user_repository)
+        user = user_repository.find_by_id(1)
+        assert user is not None
+        assert user_repository.delete(user)
+        assert user_repository.find_by_id(1) is None
+
+    def test_delete_user_with_user_not_found(self, user_repository: UserRepository):
+        assert user_repository.delete(User(id=1, name="John Doe", email="john@example.com")) is False
