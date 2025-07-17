@@ -30,3 +30,4 @@ class PySpringModelProperties(Properties):
     __key__ = "py_spring_model"
     model_file_postfix_patterns: set[str]
     sqlalchemy_database_uri: str
+    create_all_tables: bool = True
