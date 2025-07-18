@@ -1,5 +1,5 @@
 from py_spring_model.core.model import PySpringModel, Field
-from py_spring_model.core.session_context_holder import SessionContextHolder
+from py_spring_model.core.session_context_holder import SessionContextHolder, Transactional
 from py_spring_model.py_spring_model_provider import provide_py_spring_model
 from py_spring_model.repository.crud_repository import CrudRepository
 from py_spring_model.repository.repository_base import RepositoryBase
@@ -16,6 +16,7 @@ __all__ = [
     "RepositoryBase",
     "SkipAutoImplmentation",
     "Query",
+    "Transactional",
 ]
 
 __version__ = "0.2.0"
