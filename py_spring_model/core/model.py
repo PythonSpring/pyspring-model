@@ -6,6 +6,7 @@ from sqlalchemy.engine.base import Connection
 from sqlmodel import SQLModel, Field
 
 from py_spring_model.core.py_spring_session import PySpringSession
+from py_spring_model.core.registry_cleanup_handler import RegistryCleanupHandler
 
 T = TypeVar("T", bound="PySpringModel")
 
@@ -46,6 +47,26 @@ class PySpringModel(SQLModel):
     @classmethod
     def set_models(cls, models: list[type["PySpringModel"]]) -> None:
         cls._models = models
+
+    @classmethod
+    def cleanup_registry_conflicts(cls) -> None:
+        """
+        Clean up SQLAlchemy registry conflicts that cause 'Multiple classes found for path' errors.
+        This method can be called manually when encountering registry conflicts.
+        """
+        handler = RegistryCleanupHandler()
+        handler.cleanup_registry_conflicts()
+        logger.info("[PYSPRING MODEL] Registry conflicts cleaned up")
+
+    @classmethod
+    def force_cleanup_registry(cls) -> None:
+        """
+        Force cleanup of all registry conflicts using aggressive cleanup methods.
+        This should be used when standard cleanup fails.
+        """
+        handler = RegistryCleanupHandler()
+        handler.force_cleanup_all_registries()
+        logger.info("[PYSPRING MODEL] Forced registry cleanup completed")
 
     @classmethod
     def get_engine(cls) -> Engine:

@@ -113,6 +113,14 @@ class PySpringModelProvider(EntityProvider, Component, ApplicationContextRequire
         handler = RegistryCleanupHandler()
         handler.cleanup_registry_conflicts()
 
+    def _force_clear_sqlalchemy_registry_conflicts(self) -> None:
+        """
+        Force clear all registry conflicts using aggressive cleanup methods.
+        This should be used when standard cleanup fails.
+        """
+        handler = RegistryCleanupHandler()
+        handler.force_cleanup_all_registries()
+
     def _create_all_tables(self) -> None:
         props = self._get_props()
         
@@ -148,10 +156,20 @@ class PySpringModelProvider(EntityProvider, Component, ApplicationContextRequire
                 if props.prevent_duplicate_imports:
                     logger.info("[TABLE CREATION ERROR] Attempting to resolve by clearing registry and retrying...")
                     
-                    # Clear registry and retry
+                    # Try standard cleanup first
                     self._clear_sqlalchemy_registry_conflicts()
-                    SQLModel.metadata.create_all(self.sql_engine)
-                    logger.success("[TABLE CREATION] Successfully created tables after registry cleanup")
+                    try:
+                        SQLModel.metadata.create_all(self.sql_engine)
+                        logger.success("[TABLE CREATION] Successfully created tables after registry cleanup")
+                    except SqlAlehemyInvalidRequestError as retry_error:
+                        if "Multiple classes found for path" in str(retry_error):
+                            logger.warning("[TABLE CREATION ERROR] Standard cleanup failed, trying forced cleanup...")
+                            # Try forced cleanup
+                            self._force_clear_sqlalchemy_registry_conflicts()
+                            SQLModel.metadata.create_all(self.sql_engine)
+                            logger.success("[TABLE CREATION] Successfully created tables after forced registry cleanup")
+                        else:
+                            raise retry_error
                 else:
                     logger.error("[TABLE CREATION ERROR] Duplicate imports detected but prevent_duplicate_imports is disabled. Please enable it or fix the duplicate imports manually.")
                     raise error

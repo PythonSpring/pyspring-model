@@ -87,4 +87,32 @@ class TestHandlers:
         
         # Verify models were processed correctly
         assert len(unique_models) >= 2  # At least our two test models
-        logger.success("Handlers work together correctly") 
+        logger.success("Handlers work together correctly")
+
+    def test_force_cleanup_method(self):
+        """Test that the force cleanup method works correctly"""
+        # First create tables normally
+        SQLModel.metadata.create_all(self.engine)
+        
+        # Verify tables were created
+        from sqlalchemy import inspect
+        inspector = inspect(self.engine)
+        tables_before = inspector.get_table_names()
+        assert "testmodela" in tables_before
+        assert "testmodelb" in tables_before
+        
+        # Now test force cleanup
+        cleanup_handler = RegistryCleanupHandler()
+        cleanup_handler.force_cleanup_all_registries()
+        
+        # After force cleanup, we should still be able to create tables
+        # (the cleanup should have resolved any conflicts)
+        SQLModel.metadata.create_all(self.engine)
+        
+        # Check that tables are still accessible
+        inspector = inspect(self.engine)
+        tables_after = inspector.get_table_names()
+        assert "testmodela" in tables_after
+        assert "testmodelb" in tables_after
+        
+        logger.success("Force cleanup method works correctly") 
