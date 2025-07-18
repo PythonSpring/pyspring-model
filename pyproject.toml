@@ -1,12 +1,12 @@
 [project]
 name = "py_spring_model"
-version = "0.1.0"
-description = "Default template for PDM package"
+dynamic = ["version"]
+description = "A powerful Python ORM library built on SQLModel that provides automatic CRUD repositories, dynamic query generation, and seamless RESTful API integration with PySpring framework."
 authors = [
-    {name = "William Chen", email = "william_w_chen@trendmicro.com"},
+    {name = "William Chen", email = "ow6201231@gmail.com"},
 ]
 dependencies = [
-    "py-spring-core>=0.0.13",
+    "py-spring-core>=0.0.21",
     "sqlmodel>=0.0.24",
 ]
 
