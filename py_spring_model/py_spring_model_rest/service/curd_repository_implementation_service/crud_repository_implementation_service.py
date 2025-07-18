@@ -143,16 +143,7 @@ class CrudRepositoryImplementationService(Component):
             # Try plural-to-singular mapping (only if param ends with 's' and is longer than 1 char)
             if param_name.endswith('s') and len(param_name) > 1:
                 # Handle special cases for words ending with 's'
-                if param_name.endswith('ies'):
-                    # words ending with 'ies' -> 'y' (e.g., 'categories' -> 'category')
-                    singular_candidate = param_name[:-3] + 'y'
-                elif param_name.endswith('ses'):
-                    # words ending with 'ses' -> 's' (e.g., 'statuses' -> 'status')
-                    singular_candidate = param_name[:-2]
-                else:
-                    # regular plural: remove 's'
-                    singular_candidate = param_name[:-1]
-                
+                singular_candidate = self._cast_plural_to_singular(param_name)            
                 if singular_candidate in field_set:
                     # Check for ambiguity: make sure we don't have both singular and plural forms as fields
                     plural_candidate = singular_candidate + 's'
@@ -173,6 +164,17 @@ class CrudRepositoryImplementationService(Component):
             raise ValueError(error_msg)
         
         return mapping
+    
+    def _cast_plural_to_singular(self, word: str) -> str:
+        if word.endswith('ies'):
+            # words ending with 'ies' -> 'y' (e.g., 'categories' -> 'category')
+            return word[:-3] + 'y'
+        elif word.endswith('ses'):
+            # words ending with 'ses' -> 's' (e.g., 'statuses' -> 'status')
+            return word[:-2]
+        else:
+            # regular plural: remove 's'
+            return word[:-1]
 
     def create_implementation_wrapper(self, query: _Query, model_type: Type[PySpringModel], original_func_annotations: dict[str, Any], param_to_field_mapping: dict[str, str]) -> Callable[..., Any]:
         def wrapper(*args, **kwargs) -> Any:
