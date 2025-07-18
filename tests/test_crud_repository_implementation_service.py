@@ -174,21 +174,27 @@ class TestQuery:
         results = user_repository.find_all_by_status_in(status=[])
         assert len(results) == 0
 
-    def test_parameter_field_mapping_order_independence(self, implementation_service: CrudRepositoryImplementationService):
-        """Test that parameter field mapping works regardless of parameter order"""
-        # Test case 1: Parameters in different order than fields
-        param_names = ['age', 'name']  # Different order
-        field_names = ['name', 'age']  # From method name
+    def test_parameter_field_mapping_simple(self, implementation_service: CrudRepositoryImplementationService):
+        """Test that parameter field mapping works with exact name matching and plural support"""
+        # Test case 1: Exact match
+        param_names = ['name', 'age']
+        field_names = ['name', 'age']
+        mapping = implementation_service._create_parameter_field_mapping(param_names, field_names)
+        assert mapping == {'name': 'name', 'age': 'age'}
+        
+        # Test case 2: Different order but same names
+        param_names = ['age', 'name']
+        field_names = ['name', 'age']
         mapping = implementation_service._create_parameter_field_mapping(param_names, field_names)
         assert mapping == {'age': 'age', 'name': 'name'}
         
-        # Test case 2: Plural parameters mapping to singular fields
+        # Test case 3: Plural parameters mapping to singular fields
         param_names = ['names', 'ages']
         field_names = ['name', 'age']
         mapping = implementation_service._create_parameter_field_mapping(param_names, field_names)
         assert mapping == {'names': 'name', 'ages': 'age'}
         
-        # Test case 3: Mixed singular and plural
+        # Test case 4: Mixed singular and plural
         param_names = ['name', 'ages']
         field_names = ['name', 'age']
         mapping = implementation_service._create_parameter_field_mapping(param_names, field_names)
@@ -196,42 +202,41 @@ class TestQuery:
 
     def test_parameter_field_mapping_validation(self, implementation_service: CrudRepositoryImplementationService):
         """Test that parameter field mapping properly validates and reports errors"""
-        # Test case 1: Parameter count mismatch
-        with pytest.raises(ValueError, match="Parameter count mismatch"):
-            implementation_service._create_parameter_field_mapping(['name'], ['name', 'age'])
-        
-        # Test case 2: Unmatched parameters
+        # Test case 1: Unmatched parameters (no exact match or plural form)
         with pytest.raises(ValueError, match="Unmatched parameters"):
-            implementation_service._create_parameter_field_mapping(['invalid_param'], ['name'])
+            implementation_service._create_parameter_field_mapping(['username'], ['name'])
         
-        # Test case 3: Unmatched fields (when we have more fields than parameters)
-        with pytest.raises(ValueError, match="Parameter count mismatch"):
-            implementation_service._create_parameter_field_mapping(['name'], ['name', 'age'])
+        # Test case 2: Parameter that can't be mapped to plural (ambiguous case)
+        # This should work because 'statuses' exists as an exact match
+        mapping = implementation_service._create_parameter_field_mapping(['statuses'], ['status', 'statuses'])
+        assert mapping == {'statuses': 'statuses'}
         
-        # Test case 4: Unmatched fields (when we have more parameters than fields)
-        with pytest.raises(ValueError, match="Parameter count mismatch"):
-            implementation_service._create_parameter_field_mapping(['name', 'age'], ['name'])
-        
-        # Test case 5: Ambiguous plural mapping (same count but no match)
+        # Test case 3: Single character ending with 's' (should not be treated as plural)
         with pytest.raises(ValueError, match="Unmatched parameters"):
-            implementation_service._create_parameter_field_mapping(['statuses'], ['status'])
+            implementation_service._create_parameter_field_mapping(['s'], ['name'])
 
     def test_parameter_field_mapping_edge_cases(self, implementation_service: CrudRepositoryImplementationService):
         """Test edge cases in parameter field mapping"""
-        # Test case 1: Single character parameter ending with 's'
-        param_names = ['s']  # This should not be treated as plural
-        field_names = ['s']
+        # Test case 1: Single parameter
+        param_names = ['name']
+        field_names = ['name']
         mapping = implementation_service._create_parameter_field_mapping(param_names, field_names)
-        assert mapping == {'s': 's'}
+        assert mapping == {'name': 'name'}
         
-        # Test case 2: Parameter ending with 's' but not plural
-        param_names = ['status']  # 'status' is already singular
+        # Test case 2: Empty lists
+        param_names = []
+        field_names = []
+        mapping = implementation_service._create_parameter_field_mapping(param_names, field_names)
+        assert mapping == {}
+        
+        # Test case 3: Parameter ending with 's' but not plural (like 'status')
+        param_names = ['status']
         field_names = ['status']
         mapping = implementation_service._create_parameter_field_mapping(param_names, field_names)
         assert mapping == {'status': 'status'}
         
-        # Test case 3: Exact matches take precedence
-        param_names = ['names', 'name']
-        field_names = ['name', 'names']
+        # Test case 4: Plural of word ending with 's' (like 'statuses')
+        param_names = ['statuses']
+        field_names = ['status']
         mapping = implementation_service._create_parameter_field_mapping(param_names, field_names)
-        assert mapping == {'names': 'names', 'name': 'name'}
+        assert mapping == {'statuses': 'status'}

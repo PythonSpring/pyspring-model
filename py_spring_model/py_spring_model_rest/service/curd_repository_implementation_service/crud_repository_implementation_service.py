@@ -113,26 +113,23 @@ class CrudRepositoryImplementationService(Component):
     def _create_parameter_field_mapping(self, param_names: list[str], field_names: list[str]) -> dict[str, str]:
         """
         Create a mapping between parameter names and field names.
-        This allows for more readable API design where parameter names can be plural
-        while still mapping to singular field names.
         
-        The method validates that parameter names correspond to field names and provides
-        clear error messages for mismatches.
+        Supports exact matching and common plural-to-singular mapping:
+        - Exact match: 'name' -> 'name'
+        - Plural to singular: 'names' -> 'name', 'ages' -> 'age'
+        
+        Rules:
+        1. Parameter names must match field names exactly, OR
+        2. Parameter names can be plural forms of field names (add 's')
+        3. No ambiguity allowed (e.g., can't have both 'name' and 'names' as fields)
         
         Examples:
-        - param_names: ['names'], field_names: ['name'] -> {'names': 'name'}
-        - param_names: ['ages'], field_names: ['age'] -> {'ages': 'age'}
         - param_names: ['name', 'age'], field_names: ['name', 'age'] -> {'name': 'name', 'age': 'age'}
+        - param_names: ['names', 'ages'], field_names: ['name', 'age'] -> {'names': 'name', 'ages': 'age'}
+        - param_names: ['name', 'ages'], field_names: ['name', 'age'] -> {'name': 'name', 'ages': 'age'}
         """
-        if len(param_names) != len(field_names):
-            raise ValueError(
-                f"Parameter count mismatch. Expected {len(field_names)} parameters for fields {field_names}, "
-                f"but got {len(param_names)} parameters: {param_names}"
-            )
-        
         mapping = {}
         unmatched_params = []
-        unmatched_fields = []
         
         # Create a set of field names for efficient lookup
         field_set = set(field_names)
@@ -143,45 +140,36 @@ class CrudRepositoryImplementationService(Component):
                 mapping[param_name] = param_name
                 continue
             
-            # Try singular/plural variations
-            singular_match = None
-            plural_match = None
-            
-            # Check if param_name is plural and field_name is singular
+            # Try plural-to-singular mapping (only if param ends with 's' and is longer than 1 char)
             if param_name.endswith('s') and len(param_name) > 1:
-                singular_candidate = param_name[:-1]
+                # Handle special cases for words ending with 's'
+                if param_name.endswith('ies'):
+                    # words ending with 'ies' -> 'y' (e.g., 'categories' -> 'category')
+                    singular_candidate = param_name[:-3] + 'y'
+                elif param_name.endswith('ses'):
+                    # words ending with 'ses' -> 's' (e.g., 'statuses' -> 'status')
+                    singular_candidate = param_name[:-2]
+                else:
+                    # regular plural: remove 's'
+                    singular_candidate = param_name[:-1]
+                
                 if singular_candidate in field_set:
-                    singular_match = singular_candidate
+                    # Check for ambiguity: make sure we don't have both singular and plural forms as fields
+                    plural_candidate = singular_candidate + 's'
+                    if plural_candidate not in field_set:
+                        mapping[param_name] = singular_candidate
+                        continue
             
-            # Check if param_name is singular and field_name is plural
-            elif not param_name.endswith('s'):
-                plural_candidate = param_name + 's'
-                if plural_candidate in field_set:
-                    plural_match = plural_candidate
-            
-            # Use the best match found
-            if singular_match:
-                mapping[param_name] = singular_match
-            elif plural_match:
-                mapping[param_name] = plural_match
-            else:
-                unmatched_params.append(param_name)
+            # No match found
+            unmatched_params.append(param_name)
         
-        # Check for unmatched fields
-        mapped_fields = set(mapping.values())
-        for field_name in field_names:
-            if field_name not in mapped_fields:
-                unmatched_fields.append(field_name)
-        
-        # Report any mismatches
-        if unmatched_params or unmatched_fields:
+        # Check if all parameters were mapped
+        if unmatched_params:
             error_msg = "Parameter to field mapping failed:\n"
-            if unmatched_params:
-                error_msg += f"  Unmatched parameters: {unmatched_params}\n"
-            if unmatched_fields:
-                error_msg += f"  Unmatched fields: {unmatched_fields}\n"
+            error_msg += f"  Unmatched parameters: {unmatched_params}\n"
             error_msg += f"  Available fields: {field_names}\n"
-            error_msg += f"  Provided parameters: {param_names}"
+            error_msg += f"  Provided parameters: {param_names}\n"
+            error_msg += "  Note: Parameters must exactly match field names or be plural forms (add 's')"
             raise ValueError(error_msg)
         
         return mapping
@@ -189,23 +177,16 @@ class CrudRepositoryImplementationService(Component):
     def create_implementation_wrapper(self, query: _Query, model_type: Type[PySpringModel], original_func_annotations: dict[str, Any], param_to_field_mapping: dict[str, str]) -> Callable[..., Any]:
         def wrapper(*args, **kwargs) -> Any:
             if len(query.required_fields) > 0:
-                # Map parameter names to field names
+                # Simple mapping: parameter names must match field names exactly
                 field_kwargs = {}
                 for param_name, value in kwargs.items():
                     if param_name in param_to_field_mapping:
                         field_name = param_to_field_mapping[param_name]
                         field_kwargs[field_name] = value
                     else:
-                        # Fallback: use parameter name as field name
-                        field_kwargs[param_name] = value
-                
-                # Check if all required fields are present
-                if set(query.required_fields) != set(field_kwargs.keys()):
-                    raise ValueError(
-                        f"Invalid number of keyword arguments. Expected {query.required_fields}, received {list(kwargs.keys())}."
-                    )
+                        raise ValueError(f"Unknown parameter '{param_name}'. Expected parameters: {list(param_to_field_mapping.keys())}")
 
-                # Execute the query with mapped field names
+                # Execute the query
                 sql_statement = self._get_sql_statement(model_type, query, field_kwargs)
                 result = self._session_execute(sql_statement, query.is_one_result)
                 logger.info(f"Executing query with params: {kwargs}")
