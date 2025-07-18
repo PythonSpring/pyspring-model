@@ -93,33 +93,128 @@ class CrudRepositoryImplementationService(Component):
             if RETURN_KEY in copy_annotations:
                 copy_annotations.pop(RETURN_KEY)
 
-            if len(copy_annotations) != len(query.required_fields) or set(
-                copy_annotations.keys()
-            ) != set(query.required_fields):
+            # Create parameter to field mapping for better API design
+            param_to_field_mapping = self._create_parameter_field_mapping(
+                list(copy_annotations.keys()), query.required_fields
+            )
+
+            if len(copy_annotations) != len(query.required_fields):
                 raise ValueError(
                     f"Invalid number of annotations. Expected {query.required_fields}, received {list(copy_annotations.keys())}."
                 )
+            
             # Create a wrapper for the current method and query
-            wrapped_method = self.create_implementation_wrapper(query, model_type, copy_annotations)
+            wrapped_method = self.create_implementation_wrapper(query, model_type, copy_annotations, param_to_field_mapping)
             logger.info(
                 f"Binding method: {method} to {repository_type}, with query: {query}"
             )
             setattr(repository_type, method, wrapped_method)
 
-    def create_implementation_wrapper(self, query: _Query, model_type: Type[PySpringModel], original_func_annotations: dict[str, Any]) -> Callable[..., Any]:
+    def _create_parameter_field_mapping(self, param_names: list[str], field_names: list[str]) -> dict[str, str]:
+        """
+        Create a mapping between parameter names and field names.
+        This allows for more readable API design where parameter names can be plural
+        while still mapping to singular field names.
+        
+        The method validates that parameter names correspond to field names and provides
+        clear error messages for mismatches.
+        
+        Examples:
+        - param_names: ['names'], field_names: ['name'] -> {'names': 'name'}
+        - param_names: ['ages'], field_names: ['age'] -> {'ages': 'age'}
+        - param_names: ['name', 'age'], field_names: ['name', 'age'] -> {'name': 'name', 'age': 'age'}
+        """
+        if len(param_names) != len(field_names):
+            raise ValueError(
+                f"Parameter count mismatch. Expected {len(field_names)} parameters for fields {field_names}, "
+                f"but got {len(param_names)} parameters: {param_names}"
+            )
+        
+        mapping = {}
+        unmatched_params = []
+        unmatched_fields = []
+        
+        # Create a set of field names for efficient lookup
+        field_set = set(field_names)
+        
+        for param_name in param_names:
+            # Try exact match first
+            if param_name in field_set:
+                mapping[param_name] = param_name
+                continue
+            
+            # Try singular/plural variations
+            singular_match = None
+            plural_match = None
+            
+            # Check if param_name is plural and field_name is singular
+            if param_name.endswith('s') and len(param_name) > 1:
+                singular_candidate = param_name[:-1]
+                if singular_candidate in field_set:
+                    singular_match = singular_candidate
+            
+            # Check if param_name is singular and field_name is plural
+            elif not param_name.endswith('s'):
+                plural_candidate = param_name + 's'
+                if plural_candidate in field_set:
+                    plural_match = plural_candidate
+            
+            # Use the best match found
+            if singular_match:
+                mapping[param_name] = singular_match
+            elif plural_match:
+                mapping[param_name] = plural_match
+            else:
+                unmatched_params.append(param_name)
+        
+        # Check for unmatched fields
+        mapped_fields = set(mapping.values())
+        for field_name in field_names:
+            if field_name not in mapped_fields:
+                unmatched_fields.append(field_name)
+        
+        # Report any mismatches
+        if unmatched_params or unmatched_fields:
+            error_msg = "Parameter to field mapping failed:\n"
+            if unmatched_params:
+                error_msg += f"  Unmatched parameters: {unmatched_params}\n"
+            if unmatched_fields:
+                error_msg += f"  Unmatched fields: {unmatched_fields}\n"
+            error_msg += f"  Available fields: {field_names}\n"
+            error_msg += f"  Provided parameters: {param_names}"
+            raise ValueError(error_msg)
+        
+        return mapping
+
+    def create_implementation_wrapper(self, query: _Query, model_type: Type[PySpringModel], original_func_annotations: dict[str, Any], param_to_field_mapping: dict[str, str]) -> Callable[..., Any]:
         def wrapper(*args, **kwargs) -> Any:
             if len(query.required_fields) > 0:
-                # Check if all required fields are present in kwargs
-                if set(query.required_fields) != set(kwargs.keys()):
+                # Map parameter names to field names
+                field_kwargs = {}
+                for param_name, value in kwargs.items():
+                    if param_name in param_to_field_mapping:
+                        field_name = param_to_field_mapping[param_name]
+                        field_kwargs[field_name] = value
+                    else:
+                        # Fallback: use parameter name as field name
+                        field_kwargs[param_name] = value
+                
+                # Check if all required fields are present
+                if set(query.required_fields) != set(field_kwargs.keys()):
                     raise ValueError(
-                        f"Invalid number of keyword arguments. Expected {query.required_fields}, received {kwargs}."
+                        f"Invalid number of keyword arguments. Expected {query.required_fields}, received {list(kwargs.keys())}."
                     )
 
-            # Execute the query
-            sql_statement = self._get_sql_statement(model_type, query, kwargs)
-            result = self._session_execute(sql_statement, query.is_one_result)
-            logger.info(f"Executing query with params: {kwargs}")
-            return result
+                # Execute the query with mapped field names
+                sql_statement = self._get_sql_statement(model_type, query, field_kwargs)
+                result = self._session_execute(sql_statement, query.is_one_result)
+                logger.info(f"Executing query with params: {kwargs}")
+                return result
+            else:
+                # No required fields, execute without parameters
+                sql_statement = self._get_sql_statement(model_type, query, {})
+                result = self._session_execute(sql_statement, query.is_one_result)
+                return result
 
         wrapper.__annotations__ = original_func_annotations
         return wrapper
