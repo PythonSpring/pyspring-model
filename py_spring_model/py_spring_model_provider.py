@@ -1,4 +1,3 @@
-import inspect
 from typing import Iterable, Type, cast
 
 import py_spring_core.core.utils as core_utils
@@ -10,6 +9,8 @@ from sqlmodel import SQLModel
 
 from py_spring_model.core.commons import ApplicationFileGroups, PySpringModelProperties
 from py_spring_model.core.model import PySpringModel
+from py_spring_model.core.duplicate_import_handler import DuplicateImportHandler
+from py_spring_model.core.registry_cleanup_handler import RegistryCleanupHandler
 from py_spring_model.py_spring_model_rest.controller.session_controller import SessionController
 from py_spring_model.repository.repository_base import RepositoryBase
 from py_spring_model.py_spring_model_rest import PySpringModelRestService
@@ -70,7 +71,9 @@ class PySpringModelProvider(EntityProvider, Component, ApplicationContextRequire
             )
 
         try:
-            self._model_classes = import_func_wrapper()
+            # First, try to import modules dynamically
+            imported_classes = import_func_wrapper()
+            logger.info(f"[SQLMODEL TABLE MODEL IMPORT] Successfully imported {len(imported_classes)} classes dynamically")
         except SqlAlehemyInvalidRequestError as error:
             logger.warning(
                 f"[ERROR ADVISE] Encounter {error.__class__.__name__} when importing model classes."
@@ -78,55 +81,50 @@ class PySpringModelProvider(EntityProvider, Component, ApplicationContextRequire
             logger.error(
                 f"[SQLMODEL TABLE MODEL IMPORT FAILED] Failed to import model modules: {error}"
             )
+            # If dynamic import fails, fall back to getting subclasses
+            logger.info("[SQLMODEL TABLE MODEL IMPORT] Falling back to subclass discovery method")
+            imported_classes = set()
+        
+        # Get all PySpringModel subclasses and deduplicate by class name and module
         self._model_classes = self._get_pyspring_model_inheritors()
-
-    def _is_from_model_file(self, cls: Type[object]) -> bool:
-        props = self._get_props()
-        try:
-            source_file_name = inspect.getsourcefile(cls)
-        except TypeError as error:
-            logger.warning(
-                f"[CHECK MODEL FILE] Failed to get source file name for class: {cls.__name__}, largely due to built-in classes.\n Actual error: {error}"
-            )
-            return False
-        if source_file_name is None:
-            return False
-        py_file_name = self._get_file_base_name(source_file_name)  # e.g., models.py
-        return py_file_name in props.model_file_postfix_patterns
+        
+        # Log the final model classes for debugging
+        logger.info(
+            f"[SQLMODEL TABLE MODEL IMPORT] Final model classes: {', '.join([f'{_cls.__name__} ({_cls.__module__})' for _cls in self._model_classes])}"
+        )
 
     def _get_file_base_name(self, file_path: str) -> str:
+        """Extract the base file name from a file path."""
         return file_path.split("/")[-1]
 
-    def _get_pyspring_model_inheritors(self) -> set[Type[object]]:
-        # use dict to store all models, use a session to check if all models are mapped
-        class_name_with_class_map: dict[str, Type[object]] = {}
-        for _cls in set(PySpringModel.__subclasses__()):
-            if _cls.__name__ in class_name_with_class_map:
-                continue
-            if not self._is_from_model_file(_cls):
-                logger.warning(
-                    f"[SQLMODEL TABLE MODEL IMPORT] {_cls.__name__} is not from model file, skip it."
-                )
-                continue
+    def _get_pyspring_model_inheritors(self) -> set[Type[PySpringModel]]:
+        """
+        Get unique PySpringModel classes using the duplicate import handler.
+        """
+        props = self._get_props()
+        handler = DuplicateImportHandler(props)
+        return handler.get_unique_model_classes()
 
-            class_name_with_class_map[_cls.__name__] = _cls
-
-        return set(class_name_with_class_map.values())
+    def _clear_sqlalchemy_registry_conflicts(self) -> None:
+        """
+        Clear any duplicate class registrations in SQLAlchemy's registry.
+        This helps prevent the 'Multiple classes found for path' error.
+        """
+        handler = RegistryCleanupHandler()
+        handler.cleanup_registry_conflicts()
 
     def _create_all_tables(self) -> None:
         props = self._get_props()
-        if not props.create_all_tables:
-            logger.info("[SQLMODEL TABLE CREATION] Skip creating all tables, set create_all_tables to True to enable.")
-            return
+        
+        # Clear any registry conflicts before creating tables if enabled
+        if props.prevent_duplicate_imports:
+            self._clear_sqlalchemy_registry_conflicts()
 
         table_names = SQLModel.metadata.tables.keys()
         logger.success(
             f"[SQLMODEL TABLE CREATION] Create all SQLModel tables, engine url: {self.sql_engine.url}, tables: {', '.join(table_names)}"
         )
-        SQLModel.metadata.create_all(self.sql_engine)
-        logger.success(
-            f"[SQLMODEL TABLE MODEL IMPORT] Get model classes from PySpringModel inheritors: {', '.join([_cls.__name__ for _cls in self._model_classes])}"
-        )
+        
 
         PySpringModel.set_engine(self.sql_engine)
         PySpringModel.set_models(
@@ -135,6 +133,30 @@ class PySpringModelProvider(EntityProvider, Component, ApplicationContextRequire
         PySpringModel.set_metadata(SQLModel.metadata)
         RepositoryBase.engine = self.sql_engine
         RepositoryBase.connection = self.sql_engine.connect()
+        if not props.create_all_tables:
+            logger.info("[SQLMODEL TABLE CREATION] Skip creating all tables, set create_all_tables to True to enable.")
+            return
+        
+        try:
+            SQLModel.metadata.create_all(self.sql_engine)
+            logger.success(
+                f"[SQLMODEL TABLE MODEL IMPORT] Get model classes from PySpringModel inheritors: {', '.join([_cls.__name__ for _cls in self._model_classes])}"
+            )
+        except SqlAlehemyInvalidRequestError as error:
+            if "Multiple classes found for path" in str(error):
+                logger.error(f"[TABLE CREATION ERROR] Duplicate class registration detected: {error}")
+                if props.prevent_duplicate_imports:
+                    logger.info("[TABLE CREATION ERROR] Attempting to resolve by clearing registry and retrying...")
+                    
+                    # Clear registry and retry
+                    self._clear_sqlalchemy_registry_conflicts()
+                    SQLModel.metadata.create_all(self.sql_engine)
+                    logger.success("[TABLE CREATION] Successfully created tables after registry cleanup")
+                else:
+                    logger.error("[TABLE CREATION ERROR] Duplicate imports detected but prevent_duplicate_imports is disabled. Please enable it or fix the duplicate imports manually.")
+                    raise error
+            else:
+                raise error
 
     def provider_init(self) -> None:
         props = self._get_props()
