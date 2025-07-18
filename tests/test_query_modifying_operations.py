@@ -17,18 +17,21 @@ class TestUser(PySpringModel, table=True):
     name: str
     email: str
     age: int = Field(default=0)
+    salary: float = Field(default=0.0)
+    status: str = Field(default="active")
+    category: str = Field(default="general")
 
 
 class TestUserRepository(CrudRepository[int, TestUser]):
     """Test repository with Query decorators for modifying operations"""
     
-    @Query("INSERT INTO testuser (name, email, age) VALUES ({name}, {email}, {age}) RETURNING *", is_modifying=True)
+    @Query("INSERT INTO testuser (name, email, age, salary, status, category) VALUES ({name}, {email}, {age}, 0.0, 'active', 'general') RETURNING *", is_modifying=True)
     def insert_user_with_commit(self, name: str, email: str, age: int) -> TestUser: 
         """INSERT operation that should commit changes"""
         ...
 
     
-    @Query("INSERT INTO testuser (name, email, age) VALUES ({name}, {email}, {age})", is_modifying=False)
+    @Query("INSERT INTO testuser (name, email, age, salary, status, category) VALUES ({name}, {email}, {age}, 0.0, 'active', 'general')", is_modifying=False)
     def insert_user_without_commit(self, name: str, email: str, age: int) -> TestUser:
         """INSERT operation that should NOT commit changes"""
         ...
@@ -669,7 +672,7 @@ class TestQueryModifyingOperations:
         with PySpringModel.create_managed_session(should_commit=True) as session:
             for name, email, age in batch_data:
                 session.execute(text(
-                    f"INSERT INTO testuser (name, email, age) VALUES ('{name}', '{email}', {age})"
+                    f"INSERT INTO testuser (name, email, age, salary, status, category) VALUES ('{name}', '{email}', {age}, 0.0, 'active', 'general')"
                 ))
         
         # Verify all batch inserts persisted
@@ -696,7 +699,7 @@ class TestQueryModifyingOperations:
             with PySpringModel.create_managed_session(should_commit=False) as session:
                 for name, email, age in rollback_data:
                     session.execute(text(
-                        f"INSERT INTO testuser (name, email, age) VALUES ('{name}', '{email}', {age})"
+                        f"INSERT INTO testuser (name, email, age, salary, status, category) VALUES ('{name}', '{email}', {age}, 0.0, 'active', 'general')"
                     ))
                 # Force rollback
                 raise Exception("Intentional rollback")

@@ -1,6 +1,6 @@
 import pytest
 
-from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.method_query_builder import _MetodQueryBuilder, _Query
+from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.method_query_builder import _MetodQueryBuilder, _Query, FieldOperation
 
 
 class TestMetodQueryBuilder:
@@ -45,7 +45,7 @@ class TestMetodQueryBuilder:
                 True,
                 ["status"],
                 [],
-                {"status": "in"},
+                {"status": FieldOperation.IN},
             ),
             (
                 "find_all_by_id_in",
@@ -53,7 +53,7 @@ class TestMetodQueryBuilder:
                 False,
                 ["id"],
                 [],
-                {"id": "in"},
+                {"id": FieldOperation.IN},
             ),
             (
                 "find_by_status_in_and_name",
@@ -61,7 +61,7 @@ class TestMetodQueryBuilder:
                 True,
                 ["status", "name"],
                 ["_and_"],
-                {"status": "in"},
+                {"status": FieldOperation.IN},
             ),
             (
                 "find_by_status_in_or_category_in",
@@ -69,7 +69,47 @@ class TestMetodQueryBuilder:
                 True,
                 ["status", "category"],
                 ["_or_"],
-                {"status": "in", "category": "in"},
+                {"status": FieldOperation.IN, "category": FieldOperation.IN},
+            ),
+            (
+                "find_by_age_gt",
+                ["age_gt"],
+                True,
+                ["age"],
+                [],
+                {"age": FieldOperation.GREATER_THAN},
+            ),
+            (
+                "find_all_by_price_gte",
+                ["price_gte"],
+                False,
+                ["price"],
+                [],
+                {"price": FieldOperation.GREATER_EQUAL},
+            ),
+            (
+                "find_by_name_like",
+                ["name_like"],
+                True,
+                ["name"],
+                [],
+                {"name": FieldOperation.LIKE},
+            ),
+            (
+                "find_by_status_ne",
+                ["status_ne"],
+                True,
+                ["status"],
+                [],
+                {"status": FieldOperation.NOT_EQUALS},
+            ),
+            (
+                "find_by_age_gt_and_status_in",
+                ["age_gt", "_and_", "status_in"],
+                True,
+                ["age", "status"],
+                ["_and_"],
+                {"age": FieldOperation.GREATER_THAN, "status": FieldOperation.IN},
             ),
         ],
     )
