@@ -133,10 +133,34 @@ class CrudRepositoryImplementationService(Component):
         parsed_query: _Query,
         params: dict[str, Any],
     ) -> SelectOfScalar[PySpringModelT]:
-        filter_condition_stack: list[ColumnElement[bool]] = [
-            getattr(model_type, field) == params[field]
-            for field in parsed_query.required_fields
-        ]
+        filter_condition_stack: list[ColumnElement[bool]] = []
+        
+        for field in parsed_query.required_fields:
+            column = getattr(model_type, field)
+            param_value = params[field]
+            
+            # Check if this field has a specific operation
+            if field in parsed_query.field_operations:
+                operation = parsed_query.field_operations[field]
+                if operation == "in":
+                    # Handle IN operation
+                    if not isinstance(param_value, (list, tuple, set)):
+                        raise ValueError(f"Parameter for IN operation must be a collection (list, tuple, or set), got {type(param_value)}")
+                    
+                    # Handle empty list case - return no results
+                    if len(param_value) == 0:
+                        # Create a condition that's always false
+                        filter_condition_stack.append(column == None)
+                        continue
+                    
+                    filter_condition_stack.append(column.in_(param_value))
+                else:
+                    # Default to equality for unknown operations
+                    filter_condition_stack.append(column == param_value)
+            else:
+                # Default equality operation
+                filter_condition_stack.append(column == param_value)
+        
         for notation in parsed_query.notations:
             right_condition = filter_condition_stack.pop(0)
             left_condition = filter_condition_stack.pop(0)

@@ -1,4 +1,5 @@
 import re
+from typing import Dict, Any
 
 from pydantic import BaseModel
 
@@ -9,12 +10,14 @@ class _Query(BaseModel):
     - `conditions`: A list of string conditions that will be used to filter the query.
     - `is_one_result`: A boolean indicating whether the query should return a single result or a list of results.
     - `required_fields`: A list of string field names that should be included in the query result.
+    - `field_operations`: A dictionary mapping field names to their operations (e.g., "in" for IN operator).
     """
 
     raw_query_list: list[str]
     is_one_result: bool
     notations: list[str]
     required_fields: list[str]
+    field_operations: Dict[str, str] = {}
 
 
 class _MetodQueryBuilder:
@@ -36,6 +39,7 @@ class _MetodQueryBuilder:
         Example:
             - 'find_by_name_and_age' -> Query(raw_query_list=['name', '_and_', 'age'], is_one_result=True, required_fields=['name', 'age'])
             - 'find_all_by_name_or_age' -> Query(raw_query_list=['name', '_or_', 'age'], is_one_result=False, required_fields=['name', 'age'])
+            - 'find_by_status_in' -> Query(raw_query_list=['status'], is_one_result=True, required_fields=['status'], field_operations={'status': 'in'})
         """
         is_one = False
         pattern = ""   
@@ -53,7 +57,6 @@ class _MetodQueryBuilder:
         if len(pattern) == 0:
             raise ValueError(f"Method name must start with 'get_by', 'find_by', 'find_all_by', or 'get_all_by': {self.method_name}")
 
-
         match = re.match(pattern, self.method_name)
         if not match:
             raise ValueError(f"Invalid method name: {self.method_name}")
@@ -62,13 +65,26 @@ class _MetodQueryBuilder:
         # Split fields by '_and_' or '_or_' and keep logical operators
         raw_query_list = re.split(r"(_and_|_or_)", raw_query)
 
+        # Extract required fields and detect operations
+        required_fields = []
+        field_operations = {}
+        
+        for field in raw_query_list:
+            if field not in ["_and_", "_or_"]:
+                # Check for IN operation
+                if field.endswith("_in"):
+                    base_field = field[:-3]  # Remove "_in" suffix
+                    required_fields.append(base_field)
+                    field_operations[base_field] = "in"
+                else:
+                    required_fields.append(field)
+
         return _Query(
             raw_query_list=raw_query_list,
             is_one_result=is_one,
-            required_fields=[
-                field for field in raw_query_list if field not in ["_and_", "_or_"]
-            ],
+            required_fields=required_fields,
             notations=[
                 notation for notation in raw_query_list if notation in ["_and_", "_or_"]
             ],
+            field_operations=field_operations,
         )
