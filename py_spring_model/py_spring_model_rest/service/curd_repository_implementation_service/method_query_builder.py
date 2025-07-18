@@ -111,7 +111,6 @@ class _MetodQueryBuilder:
             ],
             field_operations=field_operations,
         )
-
     def _detect_field_operation(self, field: str) -> FieldOperation | None:
         """
         Detect field operation based on field suffix.
@@ -122,11 +121,8 @@ class _MetodQueryBuilder:
         Returns:
             FieldOperation if detected, None if no operation suffix found
         """
-        # Check for _not_in first (longer suffix) to avoid matching _in
-        if field.endswith("_not_in"):
-            return FieldOperation.NOT_IN
-        
         operation_suffixes = {
+            "_not_in": FieldOperation.NOT_IN, # _not_in should be check before _in for preventing false positive
             "_in": FieldOperation.IN,
             "_gt": FieldOperation.GREATER_THAN,
             "_gte": FieldOperation.GREATER_EQUAL,
