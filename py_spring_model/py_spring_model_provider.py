@@ -115,18 +115,7 @@ class PySpringModelProvider(EntityProvider, Component, ApplicationContextRequire
 
     def _create_all_tables(self) -> None:
         props = self._get_props()
-        if not props.create_all_tables:
-            logger.info("[SQLMODEL TABLE CREATION] Skip creating all tables, set create_all_tables to True to enable.")
-            return
-
-        table_names = SQLModel.metadata.tables.keys()
-        logger.success(
-            f"[SQLMODEL TABLE CREATION] Create all SQLModel tables, engine url: {self.sql_engine.url}, tables: {', '.join(table_names)}"
-        )
-        SQLModel.metadata.create_all(self.sql_engine)
-        logger.success(
-            f"[SQLMODEL TABLE MODEL IMPORT] Get model classes from PySpringModel inheritors: {', '.join([_cls.__name__ for _cls in self._model_classes])}"
-        )
+        
 
         PySpringModel.set_engine(self.sql_engine)
         PySpringModel.set_models(
@@ -135,6 +124,21 @@ class PySpringModelProvider(EntityProvider, Component, ApplicationContextRequire
         PySpringModel.set_metadata(SQLModel.metadata)
         RepositoryBase.engine = self.sql_engine
         RepositoryBase.connection = self.sql_engine.connect()
+
+        if not props.create_all_tables:
+            logger.info("[SQLMODEL TABLE CREATION] Skip creating all tables, set create_all_tables to True to enable.")
+            return
+        if not props.create_all_tables:
+            return
+        
+        table_names = SQLModel.metadata.tables.keys()
+        logger.success(
+            f"[SQLMODEL TABLE CREATION] Create all SQLModel tables, engine url: {self.sql_engine.url}, tables: {', '.join(table_names)}"
+        )
+        SQLModel.metadata.create_all(self.sql_engine)
+        logger.success(
+            f"[SQLMODEL TABLE MODEL IMPORT] Get model classes from PySpringModel inheritors: {', '.join([_cls.__name__ for _cls in self._model_classes])}"
+        )
 
     def provider_init(self) -> None:
         props = self._get_props()
