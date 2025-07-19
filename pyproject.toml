@@ -6,7 +6,7 @@ authors = [
     {name = "William Chen", email = "ow6201231@gmail.com"},
 ]
 dependencies = [
-    "py-spring-core>=0.0.21",
+    "py-spring-core>=0.0.22",
     "sqlmodel>=0.0.24",
 ]
 
