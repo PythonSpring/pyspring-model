@@ -57,6 +57,11 @@ class PySpringModelProvider(EntityProvider, Component, ApplicationContextRequire
             f"[SQLMODEL TABLE MODEL IMPORT] Get model classes from PySpringModel inheritors: {', '.join([_cls.__name__ for _cls in self._model_classes])}"
         )
 
+    def _init_repository_query_implementation(self) -> None:
+        implementation_service = CrudRepositoryImplementationService()
+        logger.info("[QUERY IMPLEMENTATION] Implement query for all CrudRepositories...")
+        implementation_service.implement_query_for_all_crud_repository_inheritors()
+        logger.success("[QUERY IMPLEMENTATION] All repository queries are implemnted.")
         
     def _init_pyspring_model(self) -> None:
         self._model_classes = self._get_pyspring_model_inheritors()
@@ -77,17 +82,12 @@ class PySpringModelProvider(EntityProvider, Component, ApplicationContextRequire
             url=props.sqlalchemy_database_uri, echo=True
         )
         self._init_pyspring_model()
+        self._init_repository_query_implementation()
         props = self._get_props()
         if not props.create_all_tables:
             logger.info("[SQLMODEL TABLE CREATION] Skip creating all tables, set create_all_tables to True to enable.")
             return
         self._create_all_tables()
-        implementation_service = CrudRepositoryImplementationService()
-        logger.info("[QUERY IMPLEMENTATION] Implement query for all CrudRepositories...")
-        implementation_service.implement_query_for_all_crud_repository_inheritors()
-        logger.success("[QUERY IMPLEMENTATION] All repository queries are implemnted.")
-
-
 def provide_py_spring_model() -> EntityProvider:
     return PySpringModelProvider(
         rest_controller_classes=[
