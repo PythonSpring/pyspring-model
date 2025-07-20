@@ -82,6 +82,10 @@ class PySpringModelProvider(EntityProvider, Component, ApplicationContextRequire
             logger.info("[SQLMODEL TABLE CREATION] Skip creating all tables, set create_all_tables to True to enable.")
             return
         self._create_all_tables()
+        implementation_service = CrudRepositoryImplementationService()
+        logger.info("[QUERY IMPLEMENTATION] Implement query for all CrudRepositories...")
+        implementation_service.implement_query_for_all_crud_repository_inheritors()
+        logger.success("[QUERY IMPLEMENTATION] All repository queries are implemnted.")
 
 
 def provide_py_spring_model() -> EntityProvider:
@@ -91,8 +95,7 @@ def provide_py_spring_model() -> EntityProvider:
             SessionController
         ],
         component_classes=[
-            PySpringModelRestService,
-            CrudRepositoryImplementationService,
+            PySpringModelRestService
         ],
         properties_classes=[
             PySpringModelProperties

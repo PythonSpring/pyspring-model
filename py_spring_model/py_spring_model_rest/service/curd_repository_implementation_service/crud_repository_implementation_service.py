@@ -30,7 +30,7 @@ from py_spring_model.py_spring_model_rest.service.curd_repository_implementation
 PySpringModelT = TypeVar("PySpringModelT", bound=PySpringModel)
 
 
-class CrudRepositoryImplementationService(Component):
+class CrudRepositoryImplementationService:
     """
     The `CrudRepositoryImplementationService` class is responsible for implementing the query logic for the `CrudRepository` inheritors.
     It dynamically generates wrapper methods for the additional methods (those starting with `get_by`, `find_by`, `get_all_by`, or `find_all_by`) defined in the `CrudRepository` inheritors. These wrapper methods handle the required field validation and execute the dynamically built queries using the `find_by` method.
@@ -342,7 +342,7 @@ class CrudRepositoryImplementationService(Component):
         )
         return result
 
-    def post_construct(self) -> None:
+    def implement_query_for_all_crud_repository_inheritors(self) -> None:
         for crud_repository_cls in self.get_all_crud_repository_inheritors():
             if crud_repository_cls.__name__ in self.class_already_implemented:
                 continue
