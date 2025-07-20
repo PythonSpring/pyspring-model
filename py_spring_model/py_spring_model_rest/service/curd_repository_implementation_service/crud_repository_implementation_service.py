@@ -30,7 +30,7 @@ from py_spring_model.py_spring_model_rest.service.curd_repository_implementation
 PySpringModelT = TypeVar("PySpringModelT", bound=PySpringModel)
 
 
-class CrudRepositoryImplementationService(Component):
+class CrudRepositoryImplementationService:
     """
     The `CrudRepositoryImplementationService` class is responsible for implementing the query logic for the `CrudRepository` inheritors.
     It dynamically generates wrapper methods for the additional methods (those starting with `get_by`, `find_by`, `get_all_by`, or `find_all_by`) defined in the `CrudRepository` inheritors. These wrapper methods handle the required field validation and execute the dynamically built queries using the `find_by` method.
@@ -47,6 +47,7 @@ class CrudRepositoryImplementationService(Component):
 
     def __init__(self) -> None:
         self.basic_crud_methods = dir(CrudRepository)
+        self.class_already_implemented: set[str] = set()
 
     def get_all_crud_repository_inheritors(self) -> list[Type[CrudRepository]]:
         inheritors: list[Type[CrudRepository]] = []
@@ -228,8 +229,10 @@ class CrudRepositoryImplementationService(Component):
         
         for field in parsed_query.required_fields:
             column = getattr(model_type, field)
-            param_value = params[field]
-            condition = self._create_field_condition(column, field, param_value, parsed_query.field_operations)
+            optional_param_value = params.get(field, None)
+            if optional_param_value is None:
+                raise ValueError(f"Required field '{field}' is missing or None in keyword arguments. All required fields must be provided with non-None values, getting {params}")
+            condition = self._create_field_condition(column, field, optional_param_value, parsed_query.field_operations)
             filter_conditions.append(condition)
         
         return filter_conditions
@@ -339,9 +342,12 @@ class CrudRepositoryImplementationService(Component):
         )
         return result
 
-    def post_construct(self) -> None:
-        for crud_repository in self.get_all_crud_repository_inheritors():
-            self._implemenmt_query(crud_repository)
+    def implement_query_for_all_crud_repository_inheritors(self) -> None:
+        for crud_repository_cls in self.get_all_crud_repository_inheritors():
+            if crud_repository_cls.__name__ in self.class_already_implemented:
+                continue
+            self._implemenmt_query(crud_repository_cls)
+            self.class_already_implemented.add(crud_repository_cls.__name__)
 
 P = ParamSpec("P")
 T = TypeVar("T", bound=BaseModel)
