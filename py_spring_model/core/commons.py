@@ -23,11 +23,9 @@ class PySpringModelProperties(Properties):
     This class defines properties specific to the PySpring Model, including:
 
     - `__key__`: The key used to identify this set of properties.
-    - `model_file_postfix_patterns`: A set of strings representing file name patterns for model files.
     - `sqlalchemy_database_uri`: The SQLAlchemy database URI used for the model.
     """
 
     __key__ = "py_spring_model"
-    model_file_postfix_patterns: set[str]
     sqlalchemy_database_uri: str
     create_all_tables: bool = True
