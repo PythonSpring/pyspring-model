@@ -230,7 +230,7 @@ class CrudRepositoryImplementationService(Component):
             column = getattr(model_type, field)
             optional_param_value = params.get(field, None)
             if optional_param_value is None:
-                raise ValueError(f"Required field '{field}' is missing or None. All required fields must be provided with non-None values.")
+                raise ValueError(f"Required field '{field}' is missing or None in keyword arguments. All required fields must be provided with non-None values, getting {params}")
             condition = self._create_field_condition(column, field, optional_param_value, parsed_query.field_operations)
             filter_conditions.append(condition)
         
