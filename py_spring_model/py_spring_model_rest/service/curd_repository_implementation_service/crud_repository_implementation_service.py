@@ -47,6 +47,7 @@ class CrudRepositoryImplementationService(Component):
 
     def __init__(self) -> None:
         self.basic_crud_methods = dir(CrudRepository)
+        self.class_already_implemented: set[str] = set()
 
     def get_all_crud_repository_inheritors(self) -> list[Type[CrudRepository]]:
         inheritors: list[Type[CrudRepository]] = []
@@ -342,8 +343,11 @@ class CrudRepositoryImplementationService(Component):
         return result
 
     def post_construct(self) -> None:
-        for crud_repository in self.get_all_crud_repository_inheritors():
-            self._implemenmt_query(crud_repository)
+        for crud_repository_cls in self.get_all_crud_repository_inheritors():
+            if crud_repository_cls.__name__ in self.class_already_implemented:
+                continue
+            self._implemenmt_query(crud_repository_cls)
+            self.class_already_implemented.add(crud_repository_cls.__name__)
 
 P = ParamSpec("P")
 T = TypeVar("T", bound=BaseModel)
