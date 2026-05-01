@@ -10,7 +10,7 @@ dependencies = [
     "sqlmodel>=0.0.38",
 ]
 
-requires-python = ">=3.11, <=3.13"
+requires-python = ">=3.11, <3.13"
 readme = "README.md"
 license = {text = "MIT"}
 
