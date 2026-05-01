@@ -1,3 +1,4 @@
+import logging
 from typing import Type, cast
 
 from loguru import logger
@@ -44,8 +45,9 @@ class PySpringModelProvider(PySpringStarter):
             f"[PYSPRING MODEL PROVIDER INIT] Initialize PySpringModelProvider with app context: {self.app_context}"
         )
         self.sql_engine = create_engine(
-            url=props.sqlalchemy_database_uri, echo=True
+            url=props.sqlalchemy_database_uri, echo=False
         )
+        self._setup_sqlalchemy_loguru_intercept()
         self._init_pyspring_model()
         self._init_repository_query_implementation()
 
@@ -71,6 +73,23 @@ class PySpringModelProvider(PySpringStarter):
         logger.success(
             f"[SQLMODEL TABLE MODEL IMPORT] Get model classes from PySpringModel inheritors: {', '.join([_cls.__name__ for _cls in self._model_classes])}"
         )
+
+    def _setup_sqlalchemy_loguru_intercept(self) -> None:
+        """Route SQLAlchemy engine logs through loguru only, preventing duplicate log entries."""
+
+        class _InterceptHandler(logging.Handler):
+            def emit(self, record: logging.LogRecord) -> None:
+                level: str | int
+                try:
+                    level = logger.level(record.levelname).name
+                except ValueError:
+                    level = record.levelno
+                logger.opt(depth=6, exception=record.exc_info).log(level, record.getMessage())
+
+        sa_logger = logging.getLogger("sqlalchemy.engine")
+        sa_logger.handlers = [_InterceptHandler()]
+        sa_logger.setLevel(logging.INFO)
+        sa_logger.propagate = False
 
     def _init_repository_query_implementation(self) -> None:
         implementation_service = CrudRepositoryImplementationService()
