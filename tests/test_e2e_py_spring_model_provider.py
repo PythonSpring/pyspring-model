@@ -8,7 +8,9 @@ Verifies the full starter lifecycle:
 import json
 import os
 import shutil
+import sys
 import tempfile
+import warnings
 from typing import Optional
 
 import pytest
@@ -48,14 +50,18 @@ class CategoryRepository(CrudRepository[int, Category]):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _create_app_fixture(db_uri: str, create_all_tables: bool = True):
-    """Create a temporary directory with config files for PySpringApplication."""
-    tmpdir = tempfile.mkdtemp()
-    src_dir = os.path.join(tmpdir, "src")
-    os.makedirs(src_dir, exist_ok=True)
+def _create_app_fixture(db_uri: str, create_all_tables: bool = True, src_dir: str = ""):
+    """Create a temporary directory with config files for PySpringApplication.
 
-    with open(os.path.join(src_dir, "__init__.py"), "w") as f:
-        f.write("")
+    If *src_dir* is provided it is used as-is (caller manages files).
+    Otherwise a fresh ``src/`` directory is created inside a new tmpdir.
+    """
+    tmpdir = tempfile.mkdtemp()
+    if not src_dir:
+        src_dir = os.path.join(tmpdir, "src")
+        os.makedirs(src_dir, exist_ok=True)
+        with open(os.path.join(src_dir, "__init__.py"), "w") as f:
+            f.write("")
 
     app_config = {
         "app_src_target_dir": src_dir,
@@ -493,3 +499,152 @@ class TestPySpringModelProviderPostgres:
         ])
         found = repo.find_all()
         assert len(found) == 2
+
+
+# ---------------------------------------------------------------------------
+# Duplicate model import edge-case tests
+# ---------------------------------------------------------------------------
+
+def _write_source_file(path: str, content: str) -> None:
+    with open(path, "w") as f:
+        f.write(content)
+
+
+@pytest.mark.e2e
+class TestDuplicateModelImport:
+    """Tests for the duplicate model class import issue.
+
+    When a model file (not named ``models.py``) lives in the scanned
+    ``app_src_target_dir`` alongside Components, and a Component imports
+    that model via standard Python import, the model class should only
+    exist once in ``PySpringModel.__subclasses__()``.
+    """
+
+    def _create_src_with_model_and_component(self, tmp_path):
+        """Create a src dir with a model file and a component that imports it."""
+        src_dir = str(tmp_path / "src")
+        os.makedirs(src_dir, exist_ok=True)
+
+        _write_source_file(
+            os.path.join(src_dir, "__init__.py"),
+            "",
+        )
+
+        # Model file — deliberately NOT named "models.py" so it is
+        # not excluded by the default exclude_file_patterns.
+        _write_source_file(
+            os.path.join(src_dir, "order_model.py"),
+            (
+                "from typing import Optional\n"
+                "from sqlmodel import Field\n"
+                "from py_spring_model import PySpringModel\n"
+                "\n"
+                "class Order(PySpringModel, table=True):\n"
+                "    __tablename__ = 'duplicate_test_order'\n"
+                "    id: Optional[int] = Field(default=None, primary_key=True)\n"
+                "    product: str\n"
+                "    amount: int = 0\n"
+            ),
+        )
+
+        # Component that imports the model via regular Python import.
+        # This is the trigger: ClassScanner loads order_model.py first
+        # via ModuleImporter (which does NOT register in sys.modules),
+        # then when it loads order_service.py the "from order_model import Order"
+        # causes Python to import order_model.py a second time.
+        _write_source_file(
+            os.path.join(src_dir, "order_service.py"),
+            (
+                "from py_spring_core import Component\n"
+                "from order_model import Order\n"
+                "\n"
+                "class OrderService(Component):\n"
+                "    def post_construct(self):\n"
+                "        self._order_cls = Order\n"
+            ),
+        )
+
+        return src_dir
+
+    def _cleanup_dynamic_modules(self, src_dir: str):
+        """Remove dynamically-created modules from sys.modules and sys.path."""
+        for mod_name in list(sys.modules):
+            if mod_name in ("order_model", "order_service"):
+                del sys.modules[mod_name]
+        if src_dir in sys.path:
+            sys.path.remove(src_dir)
+
+    def test_model_imported_by_component_should_produce_single_subclass(self, tmp_path):
+        """A model imported by both the scanner and a Component should exist
+        exactly once in PySpringModel.__subclasses__()."""
+        src_dir = self._create_src_with_model_and_component(tmp_path)
+        sys.path.insert(0, src_dir)
+
+        db_path = str(tmp_path / "dup.db")
+        db_uri = f"sqlite:///{db_path}"
+        config_path, tmpdir = _create_app_fixture(db_uri, src_dir=src_dir)
+
+        try:
+            _run_app(config_path)
+
+            order_subclasses = [
+                c for c in PySpringModel.__subclasses__()
+                if c.__name__ == "Order"
+            ]
+
+            # Correct behavior: exactly 1 copy should exist
+            assert len(order_subclasses) == 1, (
+                f"Expected exactly 1 Order subclass, got {len(order_subclasses)}. "
+                f"ModuleImporter is creating duplicate class instances."
+            )
+        finally:
+            _cleanup(tmpdir)
+            self._cleanup_dynamic_modules(src_dir)
+            
+    def test_model_named_models_py_is_excluded_by_default(self, tmp_path):
+        """A model file named ``models.py`` should be excluded from scanning
+        by the default ``exclude_file_patterns``, avoiding the duplicate issue."""
+        src_dir = str(tmp_path / "src")
+        os.makedirs(src_dir, exist_ok=True)
+
+        _write_source_file(os.path.join(src_dir, "__init__.py"), "")
+
+        _write_source_file(
+            os.path.join(src_dir, "models.py"),
+            (
+                "from typing import Optional\n"
+                "from sqlmodel import Field\n"
+                "from py_spring_model import PySpringModel\n"
+                "\n"
+                "class ExcludedModel(PySpringModel, table=True):\n"
+                "    __tablename__ = 'excluded_test_model'\n"
+                "    id: Optional[int] = Field(default=None, primary_key=True)\n"
+                "    name: str\n"
+            ),
+        )
+
+        sys.path.insert(0, src_dir)
+        db_path = str(tmp_path / "excluded.db")
+        db_uri = f"sqlite:///{db_path}"
+        config_path, tmpdir = _create_app_fixture(db_uri, src_dir=src_dir)
+
+        try:
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                _run_app(config_path)
+
+            sa_warnings = [
+                w for w in caught
+                if "will be replaced in the string-lookup table" in str(w.message)
+            ]
+            assert len(sa_warnings) == 0, (
+                f"Expected no SAWarning for models.py (excluded by default), "
+                f"but got {len(sa_warnings)}"
+            )
+        finally:
+            _cleanup(tmpdir)
+            for mod_name in list(sys.modules):
+                if mod_name in ("models",):
+                    del sys.modules[mod_name]
+            if src_dir in sys.path:
+                sys.path.remove(src_dir)
