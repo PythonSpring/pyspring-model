@@ -30,9 +30,15 @@ class PySpringModelProvider(PySpringStarter):
         self.properties_classes.append(PySpringModelProperties)
 
     def on_initialized(self) -> None:
-        assert self.app_context is not None
+        if self.app_context is None:
+            raise RuntimeError(
+                "PySpringModelProvider.on_initialized() called before app_context was set."
+            )
         props = self.app_context.get_properties(PySpringModelProperties)
-        assert props is not None
+        if props is None:
+            raise RuntimeError(
+                "PySpringModelProperties not found. Ensure the 'py_spring_model' key exists in application-properties.json."
+            )
 
         logger.info(
             f"[PYSPRING MODEL PROVIDER INIT] Initialize PySpringModelProvider with app context: {self.app_context}"
