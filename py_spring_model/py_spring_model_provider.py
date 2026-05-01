@@ -1,7 +1,7 @@
 from typing import Type, cast
 
 from loguru import logger
-from py_spring_core import Component, EntityProvider, ApplicationContextRequired
+from py_spring_core import PySpringStarter
 from sqlalchemy import create_engine
 from sqlmodel import SQLModel
 
@@ -15,38 +15,47 @@ from py_spring_model.py_spring_model_rest.service.curd_repository_implementation
 )
 
 
-class ApplicationContextNotSetError(Exception): ...
-
-
-class PySpringModelProvider(EntityProvider, Component, ApplicationContextRequired):
+class PySpringModelProvider(PySpringStarter):
     """
     The `PySpringModelProvider` class is responsible for initializing the PySpring model provider, which includes:
-    - Grouping file paths into class files and model files
     - Dynamically importing model modules
     - Creating all SQLModel tables
     - Setting up the SQLAlchemy engine and connection
     - Registering PySpring model classes and metadata
-
-    This class is a key component in the PySpring model infrastructure, handling the setup and initialization of the model-related functionality.
     """
 
-    def _get_props(self) -> PySpringModelProperties:
-        app_context =  self.get_application_context()
-        assert app_context is not None
-        props = app_context.get_properties(PySpringModelProperties)
+    def on_configure(self) -> None:
+        self.rest_controller_classes.append(SessionController)
+        self.component_classes.append(PySpringModelRestService)
+        self.properties_classes.append(PySpringModelProperties)
+
+    def on_initialized(self) -> None:
+        assert self.app_context is not None
+        props = self.app_context.get_properties(PySpringModelProperties)
         assert props is not None
-        return props
+
+        logger.info(
+            f"[PYSPRING MODEL PROVIDER INIT] Initialize PySpringModelProvider with app context: {self.app_context}"
+        )
+        self.sql_engine = create_engine(
+            url=props.sqlalchemy_database_uri, echo=True
+        )
+        self._init_pyspring_model()
+        self._init_repository_query_implementation()
+
+        if not props.create_all_tables:
+            logger.info("[SQLMODEL TABLE CREATION] Skip creating all tables, set create_all_tables to True to enable.")
+            return
+        self._create_all_tables()
 
     def _get_pyspring_model_inheritors(self) -> set[Type[object]]:
-        # use dict to store all models, use a session to check if all models are mapped
         class_name_with_class_map: dict[str, Type[object]] = {}
         for _cls in set(PySpringModel.__subclasses__()):
             if _cls.__name__ in class_name_with_class_map:
                 continue
             class_name_with_class_map[_cls.__name__] = _cls
-
         return set(class_name_with_class_map.values())
-    
+
     def _create_all_tables(self) -> None:
         table_names = SQLModel.metadata.tables.keys()
         logger.success(
@@ -61,8 +70,8 @@ class PySpringModelProvider(EntityProvider, Component, ApplicationContextRequire
         implementation_service = CrudRepositoryImplementationService()
         logger.info("[QUERY IMPLEMENTATION] Implement query for all CrudRepositories...")
         implementation_service.implement_query_for_all_crud_repository_inheritors()
-        logger.success("[QUERY IMPLEMENTATION] All repository queries are implemnted.")
-        
+        logger.success("[QUERY IMPLEMENTATION] All repository queries are implemented.")
+
     def _init_pyspring_model(self) -> None:
         self._model_classes = self._get_pyspring_model_inheritors()
         PySpringModel.set_engine(self.sql_engine)
@@ -72,32 +81,3 @@ class PySpringModelProvider(EntityProvider, Component, ApplicationContextRequire
         PySpringModel.set_metadata(SQLModel.metadata)
         RepositoryBase.engine = self.sql_engine
         RepositoryBase.connection = self.sql_engine.connect()
-        
-    def provider_init(self) -> None:
-        props = self._get_props()
-        logger.info(
-            f"[PYSPRING MODEL PROVIDER INIT] Initialize PySpringModelProvider with app context: {self.app_context}"
-        )
-        self.sql_engine = create_engine(
-            url=props.sqlalchemy_database_uri, echo=True
-        )
-        self._init_pyspring_model()
-        self._init_repository_query_implementation()
-        props = self._get_props()
-        if not props.create_all_tables:
-            logger.info("[SQLMODEL TABLE CREATION] Skip creating all tables, set create_all_tables to True to enable.")
-            return
-        self._create_all_tables()
-def provide_py_spring_model() -> EntityProvider:
-    return PySpringModelProvider(
-        rest_controller_classes=[
-            # PySpringModelRestController
-            SessionController
-        ],
-        component_classes=[
-            PySpringModelRestService
-        ],
-        properties_classes=[
-            PySpringModelProperties
-        ],
-    )
