@@ -3,15 +3,23 @@ PySpringModel
 
 PySpringModel is a Python module built on top of PySpring that provides a simple and efficient way to interact with SQL databases. It leverages the power of SQLAlchemy and SQLModel to provide a streamlined interface for CRUD operations, and integrates seamlessly with the PySpring framework for Dependency Injection and RESTful API development.
 
+Requirements
+------------
+
+- Python >= 3.11, < 3.13
+- py-spring-core >= 0.3.5
+- sqlmodel >= 0.0.38
+
 Features
 --------
 
 -   SQLModel Integration: PySpringModel uses SQLModel as its core ORM, providing a simple and Pythonic way to define your data models and interact with your database.
 -   Automatic CRUD Repository: PySpringModel automatically generates a CRUD repository for each of your SQLModel entities, providing common database operations such as Create, Read, Update, and Delete.
--   Managed Sessions: PySpringModel provides a context manager for database sessions, automatically handling session commit and rollback to ensure data consistency.
+-   Transaction Management: Declarative transaction management via the `@Transactional` decorator with 7 propagation types (REQUIRED, REQUIRES_NEW, SUPPORTS, MANDATORY, NOT_SUPPORTED, NEVER, NESTED).
+-   Context-Based Session Management: Thread-safe session handling via `SessionContextHolder` using Python `contextvars`, with automatic session cleanup per HTTP request through middleware.
 -   Dynamic Query Generation: PySpringModel can dynamically generate and execute SQL queries based on method names in your repositories.
 -   Field Operations Support: PySpringModel supports various field operations like IN, NOT IN, greater than, less than, LIKE, and more.
--   Custom SQL Queries: PySpringModel supports custom SQL queries using the `@Query` decorator for complex database operations.
+-   Custom SQL Queries: PySpringModel supports custom SQL queries using the `@Query` decorator for complex database operations, including support for modifying queries (INSERT, UPDATE, DELETE).
 -   RESTful API Integration: PySpringModel integrates with the PySpring framework to automatically generate basic table CRUD APIs for your SQLModel entities.
 
 Installation
@@ -84,13 +92,81 @@ class UserService:
 
 ```py
 from py_spring_core import PySpringApplication
-from py_spring_model.py_spring_model_provider import provide_py_spring_model
+from py_spring_model import PySpringModelStarter
 
 PySpringApplication(
     "./app-config.json",
-    entity_providers=[provide_py_spring_model()]
+    entity_providers=[PySpringModelStarter()]
 ).run()
 ```
+
+### Configuration
+
+PySpringModel is configured via the `py_spring_model` key in your `application-properties.json`:
+
+```json
+{
+    "py_spring_model": {
+        "sqlalchemy_database_uri": "sqlite:///./app.db",
+        "create_all_tables": true
+    }
+}
+```
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `sqlalchemy_database_uri` | `str` | (required) | SQLAlchemy database connection URI |
+| `create_all_tables` | `bool` | `true` | Automatically create all SQLModel tables on startup |
+
+Transaction Management
+---------------------
+
+PySpringModel provides declarative transaction management through the `@Transactional` decorator. All `CrudRepository` built-in methods are already transactional. You can also use `@Transactional` on your own service methods.
+
+### Basic Usage
+
+```py
+from py_spring_model import Transactional
+
+class UserService:
+    user_repository: UserRepository
+
+    @Transactional
+    def create_user(self, name: str, email: str) -> User:
+        user = User(name=name, email=email)
+        return self.user_repository.save(user)
+```
+
+When used without parameters, `@Transactional` defaults to `Propagation.REQUIRED`.
+
+### Propagation Types
+
+You can specify propagation behavior to control how transactions interact with each other:
+
+```py
+from py_spring_model import Transactional, Propagation
+
+@Transactional(propagation=Propagation.REQUIRES_NEW)
+def write_audit_log(self, message: str) -> None:
+    # Always runs in a new, independent transaction
+    ...
+```
+
+| Propagation | Behavior |
+|-------------|----------|
+| `REQUIRED` (default) | Join existing transaction, or create a new one if none exists |
+| `REQUIRES_NEW` | Always create a new, independent transaction (suspends existing) |
+| `SUPPORTS` | Run within existing transaction if present, otherwise run without one |
+| `MANDATORY` | Must run within an existing transaction; raises `TransactionRequiredError` if none exists |
+| `NOT_SUPPORTED` | Suspend existing transaction and run without one |
+| `NEVER` | Must not run within a transaction; raises `ExistingTransactionError` if one exists |
+| `NESTED` | Run within a savepoint if a transaction exists, otherwise create a new transaction |
+
+### SessionContextHolder
+
+The `SessionContextHolder` provides context-based session management using Python `contextvars`, ensuring thread-safe and async-safe session isolation. It is used internally by `@Transactional` and `CrudRepository`.
+
+For HTTP applications, a session cleanup middleware is automatically registered to ensure sessions are properly closed after each request.
 
 Query Examples
 --------------
@@ -242,6 +318,18 @@ def get_user_by_email(self, email: str) -> Optional[User]: ...
 
 @Query("SELECT * FROM user WHERE name = {name} AND status = {status} LIMIT 1")
 def get_user_by_name_and_status(self, name: str, status: str) -> Optional[User]: ...
+```
+
+#### Modifying Queries (INSERT, UPDATE, DELETE)
+
+The `@Query` decorator supports modifying operations by setting `is_modifying=True`. This ensures the session commits after execution:
+
+```py
+@Query("UPDATE user SET status = {new_status} WHERE age < {max_age}", is_modifying=True)
+def deactivate_young_users(self, new_status: str, max_age: int) -> List[User]: ...
+
+@Query("DELETE FROM user WHERE status = {status}", is_modifying=True)
+def purge_users_by_status(self, status: str) -> List[User]: ...
 ```
 
 ### Built-in CRUD Operations
@@ -404,6 +492,7 @@ def find_by_name_and_age(self, username: str, user_age: int) -> Optional[User]: 
 The `@Query` decorator supports:
 
 - **Parameter substitution**: Use `{parameter_name}` in SQL
+- **Modifying queries**: Pass `is_modifying=True` for INSERT/UPDATE/DELETE operations
 - **Type safety**: Method parameters must match SQL parameters
 - **Return type inference**: Automatically handles `Optional[Model]` and `List[Model]`
 - **Error handling**: Validates required parameters and types

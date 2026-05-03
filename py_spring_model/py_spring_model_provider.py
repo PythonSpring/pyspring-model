@@ -16,9 +16,9 @@ from py_spring_model.py_spring_model_rest.service.curd_repository_implementation
 )
 
 
-class PySpringModelProvider(PySpringStarter):
+class PySpringModelStarter(PySpringStarter):
     """
-    The `PySpringModelProvider` class is responsible for initializing the PySpring model provider, which includes:
+    The `PySpringModelStarter` class is responsible for initializing the PySpring model provider, which includes:
     - Dynamically importing model modules
     - Creating all SQLModel tables
     - Setting up the SQLAlchemy engine and connection
@@ -33,7 +33,7 @@ class PySpringModelProvider(PySpringStarter):
     def on_initialized(self) -> None:
         if self.app_context is None:
             raise RuntimeError(
-                "PySpringModelProvider.on_initialized() called before app_context was set."
+                "PySpringModelStarter.on_initialized() called before app_context was set."
             )
         props = self.app_context.get_properties(PySpringModelProperties)
         if props is None:
@@ -42,7 +42,7 @@ class PySpringModelProvider(PySpringStarter):
             )
 
         logger.info(
-            f"[PYSPRING MODEL PROVIDER INIT] Initialize PySpringModelProvider with app context: {self.app_context}"
+            f"[PYSPRING MODEL PROVIDER INIT] Initialize PySpringModelStarter with app context: {self.app_context}"
         )
         self.sql_engine = create_engine(
             url=props.sqlalchemy_database_uri, echo=False

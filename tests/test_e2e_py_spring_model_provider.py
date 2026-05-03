@@ -1,5 +1,5 @@
 """
-E2E tests for PySpringModelProvider lifecycle with SQLite and PostgreSQL backends.
+E2E tests for PySpringModelStarter lifecycle with SQLite and PostgreSQL backends.
 
 Verifies the full starter lifecycle:
   on_configure -> IoC container build -> on_initialized -> table creation -> CRUD
@@ -16,7 +16,7 @@ from typing import Optional
 import pytest
 from sqlmodel import Field, SQLModel
 
-from py_spring_model import CrudRepository, PySpringModel, PySpringModelProvider
+from py_spring_model import CrudRepository, PySpringModel, PySpringModelStarter
 from py_spring_model.core.session_context_holder import SessionContextHolder
 from py_spring_model.repository.repository_base import RepositoryBase
 
@@ -89,19 +89,19 @@ def _create_app_fixture(db_uri: str, create_all_tables: bool = True, src_dir: st
 
 
 def _run_app(config_path: str):
-    """Run the PySpring application with PySpringModelProvider."""
+    """Run the PySpring application with PySpringModelStarter."""
     from py_spring_core import PySpringApplication
 
     app = PySpringApplication(
         config_path,
-        starters=[PySpringModelProvider()],
+        starters=[PySpringModelStarter()],
     )
     app.run()
     return app
 
 
 def _cleanup(tmpdir: str):
-    """Reset all global state that PySpringModelProvider sets."""
+    """Reset all global state that PySpringModelStarter sets."""
     SessionContextHolder.clear()
 
     # Close RepositoryBase connection before resetting
@@ -126,7 +126,7 @@ def _cleanup(tmpdir: str):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.e2e
-class TestPySpringModelProviderSQLite:
+class TestPySpringModelStarterSQLite:
     """E2E tests using SQLite file database."""
 
     @pytest.fixture(autouse=True)
@@ -141,7 +141,7 @@ class TestPySpringModelProviderSQLite:
     def test_on_configure_registers_entities(self):
         """Starter's on_configure should have registered component, properties, and controller classes."""
         starter = self.app.starters[0]
-        assert isinstance(starter, PySpringModelProvider)
+        assert isinstance(starter, PySpringModelStarter)
 
         from py_spring_model.core.commons import PySpringModelProperties
         from py_spring_model.py_spring_model_rest import PySpringModelRestService
@@ -215,7 +215,7 @@ class TestPySpringModelProviderSQLite:
 # ---------------------------------------------------------------------------
 
 @pytest.mark.e2e
-class TestPySpringModelProviderEdgeCases:
+class TestPySpringModelStarterEdgeCases:
     """Edge-case tests using SQLite."""
 
     def test_create_all_tables_false_skips_table_creation(self, tmp_path):
@@ -385,7 +385,7 @@ class TestPySpringModelProviderEdgeCases:
         with pytest.raises(TypeError, match="py_spring_model is not found"):
             app = PySpringApplication(
                 config_path,
-                starters=[PySpringModelProvider()],
+                starters=[PySpringModelStarter()],
             )
             app.run()
 
@@ -397,7 +397,7 @@ class TestPySpringModelProviderEdgeCases:
 # ---------------------------------------------------------------------------
 
 @pytest.mark.e2e
-class TestPySpringModelProviderPostgres:
+class TestPySpringModelStarterPostgres:
     """E2E tests using PostgreSQL via testcontainers."""
 
     @pytest.fixture(autouse=True)
