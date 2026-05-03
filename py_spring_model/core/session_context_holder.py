@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 from contextvars import ContextVar
 from dataclasses import dataclass
 from functools import wraps
-from typing import Callable, ClassVar, Optional, ParamSpec, TypeVar, Union
+from typing import TYPE_CHECKING, Callable, ClassVar, Optional, ParamSpec, TypeVar, Union, overload
 
 from py_spring_model.core.model import PySpringModel
 from py_spring_model.core.py_spring_session import PySpringSession
+
+if TYPE_CHECKING:
+    from py_spring_model.core.propagation import Propagation
 
 
 @dataclass
@@ -17,10 +22,15 @@ P = ParamSpec("P")
 RT = TypeVar("RT")
 
 
+@overload
+def Transactional(func: Callable[P, RT]) -> Callable[P, RT]: ...
+@overload
+def Transactional(*, propagation: Propagation) -> Callable[[Callable[P, RT]], Callable[P, RT]]: ...
+
 def Transactional(
     func: Optional[Callable[P, RT]] = None,
     *,
-    propagation: Optional["_Propagation"] = None,
+    propagation: Optional[Propagation] = None,
 ) -> Union[Callable[P, RT], Callable[[Callable[P, RT]], Callable[P, RT]]]:
     """
     Decorator for managing database transactions with propagation support.
@@ -32,10 +42,10 @@ def Transactional(
         @Transactional(propagation=Propagation.REQUIRES_NEW)
         def write_audit(): ...
     """
-    from py_spring_model.core.propagation import Propagation
+    from py_spring_model.core.propagation import Propagation as PropEnum
     from py_spring_model.core.transaction_manager import TransactionManager
 
-    resolved_propagation = propagation if propagation is not None else Propagation.REQUIRED
+    resolved_propagation = propagation if propagation is not None else PropEnum.REQUIRED
 
     def decorator(fn: Callable[P, RT]) -> Callable[P, RT]:
         @wraps(fn)
@@ -46,10 +56,6 @@ def Transactional(
     if func is not None:
         return decorator(func)
     return decorator
-
-
-# Type alias for forward reference (avoids circular import at module level)
-_Propagation = "Propagation"
 
 
 class SessionContextHolder:

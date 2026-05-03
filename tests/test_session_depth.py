@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from sqlalchemy import create_engine
 from sqlmodel import SQLModel
 from py_spring_model.core.model import PySpringModel
