@@ -182,3 +182,51 @@ class TestCrudRepository:
 
     def test_exists_by_id_not_found(self, user_repository: UserRepository):
         assert user_repository.exists_by_id(999) is False
+
+    def test_find_all_with_limit(self, user_repository: UserRepository):
+        for i in range(5):
+            user_repository.save(User(name=f"User{i}", email=f"user{i}@example.com"))
+        result = user_repository.find_all(limit=3)
+        assert len(result) == 3
+
+    def test_find_all_with_offset(self, user_repository: UserRepository):
+        for i in range(5):
+            user_repository.save(User(name=f"User{i}", email=f"user{i}@example.com"))
+        result = user_repository.find_all(offset=3)
+        assert len(result) == 2
+
+    def test_find_all_with_offset_and_limit(self, user_repository: UserRepository):
+        for i in range(5):
+            user_repository.save(User(name=f"User{i}", email=f"user{i}@example.com"))
+        result = user_repository.find_all(offset=1, limit=2)
+        assert len(result) == 2
+
+    def test_find_all_with_order_by_asc(self, user_repository: UserRepository):
+        user_repository.save(User(name="Charlie", email="c@example.com"))
+        user_repository.save(User(name="Alice", email="a@example.com"))
+        user_repository.save(User(name="Bob", email="b@example.com"))
+        result = user_repository.find_all(order_by="name", ascending=True)
+        assert [u.name for u in result] == ["Alice", "Bob", "Charlie"]
+
+    def test_find_all_with_order_by_desc(self, user_repository: UserRepository):
+        user_repository.save(User(name="Charlie", email="c@example.com"))
+        user_repository.save(User(name="Alice", email="a@example.com"))
+        user_repository.save(User(name="Bob", email="b@example.com"))
+        result = user_repository.find_all(order_by="name", ascending=False)
+        assert [u.name for u in result] == ["Charlie", "Bob", "Alice"]
+
+    def test_find_all_backward_compatible(self, user_repository: UserRepository):
+        self.create_test_user(user_repository)
+        result = user_repository.find_all()
+        assert len(result) == 1
+
+    def test_save_all_returns_list(self, user_repository: UserRepository):
+        users = [
+            User(name="User1", email="u1@example.com"),
+            User(name="User2", email="u2@example.com"),
+        ]
+        result = user_repository.save_all(users)
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert result[0].name == "User1"
+        assert result[1].name == "User2"

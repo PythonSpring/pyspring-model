@@ -112,10 +112,23 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
         return [entity for entity in session.exec(statement).all()]  # type: ignore
 
     @Transactional
-    def find_all(self) -> list[T]:
+    def find_all(
+        self,
+        offset: Optional[int] = None,
+        limit: Optional[int] = None,
+        order_by: Optional[str] = None,
+        ascending: bool = True,
+    ) -> list[T]:
         session = SessionContextHolder.get_or_create_session()
-        statement = select(self.model_class)  # type: ignore
-        return [entity for entity in session.exec(statement).all()]  # type: ignore
+        statement = select(self.model_class)
+        if order_by is not None:
+            column = getattr(self.model_class, order_by)
+            statement = statement.order_by(column.asc() if ascending else column.desc())
+        if offset is not None:
+            statement = statement.offset(offset)
+        if limit is not None:
+            statement = statement.limit(limit)
+        return list(session.exec(statement).all())
 
     @Transactional
     def save(self, entity: T) -> T:
@@ -124,13 +137,11 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
         return entity
 
     @Transactional
-    def save_all(
-        self,
-        entities: Iterable[T],
-    ) -> bool:
+    def save_all(self, entities: Iterable[T]) -> list[T]:
         session = SessionContextHolder.get_or_create_session()
-        session.add_all(entities)
-        return True
+        entity_list = list(entities)
+        session.add_all(entity_list)
+        return entity_list
 
     @Transactional
     def delete(self, entity: T) -> bool:
