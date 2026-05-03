@@ -25,58 +25,58 @@ class TestUser(PySpringModel, table=True):
 class TestUserRepository(CrudRepository[int, TestUser]):
     """Test repository with Query decorators for modifying operations"""
     
-    @Query("INSERT INTO testuser (name, email, age, salary, status, category) VALUES ({name}, {email}, {age}, 0.0, 'active', 'general') RETURNING *", is_modifying=True)
-    def insert_user_with_commit(self, name: str, email: str, age: int) -> TestUser: 
+    @Query("INSERT INTO testuser (name, email, age, salary, status, category) VALUES (:name, :email, :age, 0.0, 'active', 'general') RETURNING *", is_modifying=True)
+    def insert_user_with_commit(self, name: str, email: str, age: int) -> TestUser:
         """INSERT operation that should commit changes"""
         ...
 
-    
-    @Query("INSERT INTO testuser (name, email, age, salary, status, category) VALUES ({name}, {email}, {age}, 0.0, 'active', 'general')", is_modifying=False)
+
+    @Query("INSERT INTO testuser (name, email, age, salary, status, category) VALUES (:name, :email, :age, 0.0, 'active', 'general')", is_modifying=False)
     def insert_user_without_commit(self, name: str, email: str, age: int) -> TestUser:
         """INSERT operation that should NOT commit changes"""
         ...
-    
-    @Query("UPDATE testuser SET name = {name}, age = {age} WHERE email = {email} RETURNING *", is_modifying=True)
+
+    @Query("UPDATE testuser SET name = :name, age = :age WHERE email = :email RETURNING *", is_modifying=True)
     def update_user_with_commit(self, name: str, email: str, age: int) -> TestUser:
         """UPDATE operation that should commit changes"""
         ...
-    
-    @Query("UPDATE testuser SET name = {name}, age = {age} WHERE email = {email}", is_modifying=False)
+
+    @Query("UPDATE testuser SET name = :name, age = :age WHERE email = :email", is_modifying=False)
     def update_user_without_commit(self, name: str, email: str, age: int) -> None:
         """UPDATE operation that should NOT commit changes"""
         ...
-    
-    @Query("SELECT * FROM testuser WHERE email = {email}")
+
+    @Query("SELECT * FROM testuser WHERE email = :email")
     def find_by_email(self, email: str) -> Optional[TestUser]:
         """SELECT operation for verification (readonly, no commit needed)"""
         ...
-    
+
     @Query("SELECT * FROM testuser")
     def find_all_users(self) -> List[TestUser]:
         """SELECT operation to get all users"""
         ...
-    
-    @Query("DELETE FROM testuser WHERE email = {email}", is_modifying=True)
+
+    @Query("DELETE FROM testuser WHERE email = :email", is_modifying=True)
     def delete_user_with_commit(self, email: str) -> None:
         """DELETE operation that should commit changes"""
         ...
-    
-    @Query("DELETE FROM testuser WHERE email = {email}", is_modifying=False)
+
+    @Query("DELETE FROM testuser WHERE email = :email", is_modifying=False)
     def delete_user_without_commit(self, email: str) -> None:
         """DELETE operation that should NOT commit changes"""
         ...
-    
-    @Query("UPDATE testuser SET age = age + {increment} WHERE age > {min_age}", is_modifying=True)
+
+    @Query("UPDATE testuser SET age = age + :increment WHERE age > :min_age", is_modifying=True)
     def bulk_update_ages_with_commit(self, increment: int, min_age: int) -> None:
         """Bulk UPDATE operation that should commit changes"""
         ...
-    
-    @Query("SELECT * FROM testuser WHERE age > {min_age} ORDER BY age DESC")
+
+    @Query("SELECT * FROM testuser WHERE age > :min_age ORDER BY age DESC")
     def find_users_by_min_age(self, min_age: int) -> List[TestUser]:
         """SELECT with parameters (readonly)"""
         ...
-    
-    @Query("SELECT COUNT(*) as count FROM testuser WHERE age BETWEEN {min_age} AND {max_age}")
+
+    @Query("SELECT COUNT(*) as count FROM testuser WHERE age BETWEEN :min_age AND :max_age")
     def count_users_by_age_range(self, min_age: int, max_age: int) -> int:
         """Aggregate query (readonly)"""
         ...
@@ -241,7 +241,7 @@ class TestQueryModifyingOperations:
             # Execute query with is_modifying=True
             try:
                 QueryExecutionService.execute_query(
-                    query_template="INSERT INTO testuser (name, email, age) VALUES ({name}, {email}, {age})",
+                    query_template="INSERT INTO testuser (name, email, age) VALUES (:name, :email, :age)",
                     func=dummy_insert_func,
                     kwargs={"name": "Test User", "email": "test@example.com", "age": 25},
                     is_modifying=True
@@ -274,7 +274,7 @@ class TestQueryModifyingOperations:
             # Execute query with is_modifying=False
             try:
                 QueryExecutionService.execute_query(
-                    query_template="UPDATE testuser SET name = {name}, age = {age} WHERE email = {email}",
+                    query_template="UPDATE testuser SET name = :name, age = :age WHERE email = :email",
                     func=dummy_update_func,
                     kwargs={"name": "Test User Updated", "email": "test@example.com", "age": 30},
                     is_modifying=False
@@ -288,7 +288,7 @@ class TestQueryModifyingOperations:
     
     def test_query_decorator_default_is_modifying_false(self):
         """Test that Query decorator defaults is_modifying to False"""
-        @Query("SELECT * FROM testuser WHERE id = {id}")
+        @Query("SELECT * FROM testuser WHERE id = :id")
         def select_user_by_id(id: int) -> Optional[TestUser]: ...
         
         # Mock the session behavior
