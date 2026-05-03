@@ -1,104 +1,132 @@
 import re
-from typing import Dict, Any
+from typing import Dict
 from enum import Enum
 
 from pydantic import BaseModel
 
 
-class ConditionNotation(str,Enum):
+class ConditionNotation(str, Enum):
     AND = "_and_"
     OR = "_or_"
+
+
+class QueryType(str, Enum):
+    SELECT_ONE = "select_one"
+    SELECT_MANY = "select_many"
+    COUNT = "count"
+    EXISTS = "exists"
+    DELETE = "delete"
+
 
 class FieldOperation(str, Enum):
     """
     Enumeration of supported field operations for dynamic query generation.
     These operations define how a field should be queried in the database.
     """
-    EQUALS = "equals"      # Default operation: field = value
-    IN = "in"             # field IN (value1, value2, ...)
-    GREATER_THAN = "gt"   # field > value
-    GREATER_EQUAL = "gte" # field >= value
-    LESS_THAN = "lt"      # field < value
-    LESS_EQUAL = "lte"    # field <= value
-    LIKE = "like"         # field LIKE pattern
-    NOT_EQUALS = "ne"     # field != value
-    NOT_IN = "not_in"     # field NOT IN (value1, value2, ...)
+    EQUALS = "equals"
+    IN = "in"
+    GREATER_THAN = "gt"
+    GREATER_EQUAL = "gte"
+    LESS_THAN = "lt"
+    LESS_EQUAL = "lte"
+    LIKE = "like"
+    NOT_EQUALS = "ne"
+    NOT_IN = "not_in"
+    BETWEEN = "between"
+    IS_NULL = "is_null"
+    IS_NOT_NULL = "is_not_null"
+    STARTS_WITH = "starts_with"
+    ENDS_WITH = "ends_with"
+    CONTAINS = "contains"
+    NOT_LIKE = "not_like"
 
 
 class _Query(BaseModel):
     """
-    A data model representing a query with the following fields:
-    - `conditions`: A list of string conditions that will be used to filter the query.
-    - `is_one_result`: A boolean indicating whether the query should return a single result or a list of results.
-    - `required_fields`: A list of string field names that should be included in the query result.
-    - `field_operations`: A dictionary mapping field names to their operations (e.g., "in" for IN operator).
+    A data model representing a parsed query with fields, conditions, and operations.
     """
-
     raw_query_list: list[str]
     is_one_result: bool
     notations: list[ConditionNotation]
     required_fields: list[str]
     field_operations: Dict[str, FieldOperation] = {}
+    query_type: QueryType = QueryType.SELECT_ONE
+    null_check_fields: list[str] = []
 
 
 class _MetodQueryBuilder:
     """
-    The `MetodQueryBuilder` class is responsible for parsing a method name and extracting the fields and conditions to be used in a database query.
-    It takes a method name as input and returns a `Query` object that contains the parsed information.
-    The `parse_query()` method is the main entry point for this functionality.
-    It analyzes the method name and determines the appropriate pattern to use for extracting the fields and conditions.
-    The method name is expected to follow a specific convention, such as `get_by_name_and_age` or `find_all_by_name_or_age`.
-    The method then splits the extracted conditions by `_and_` and `_or_` and returns a `Query` object with the parsed information.
+    Parses a method name and extracts fields, conditions, and query type for dynamic query generation.
     """
 
     def __init__(self, method_name: str) -> None:
         self.method_name = method_name
 
     def parse_query(self) -> _Query:
-        """
-        Parse the method name to extract fields and conditions.
-        Example:
-            - 'find_by_name_and_age' -> Query(raw_query_list=['name', '_and_', 'age'], is_one_result=True, required_fields=['name', 'age'])
-            - 'find_all_by_name_or_age' -> Query(raw_query_list=['name', '_or_', 'age'], is_one_result=False, required_fields=['name', 'age'])
-            - 'find_by_status_in' -> Query(raw_query_list=['status'], is_one_result=True, required_fields=['status'], field_operations={'status': FieldOperation.IN})
-            - 'find_by_age_gt' -> Query(raw_query_list=['age'], is_one_result=True, required_fields=['age'], field_operations={'age': FieldOperation.GREATER_THAN})
-        """
         is_one = False
-        pattern = ""   
-        if self.method_name.startswith("get_by"):
+        pattern = ""
+        query_type = QueryType.SELECT_MANY
+
+        if self.method_name.startswith("count_by"):
+            pattern = r"count_by_(.*)"
+            is_one = True
+            query_type = QueryType.COUNT
+        elif self.method_name.startswith("exists_by"):
+            pattern = r"exists_by_(.*)"
+            is_one = True
+            query_type = QueryType.EXISTS
+        elif self.method_name.startswith("delete_all_by"):
+            pattern = r"delete_all_by_(.*)"
+            query_type = QueryType.DELETE
+        elif self.method_name.startswith("delete_by"):
+            pattern = r"delete_by_(.*)"
+            is_one = True
+            query_type = QueryType.DELETE
+        elif self.method_name.startswith("get_by"):
             pattern = r"get_by_(.*)"
             is_one = True
+            query_type = QueryType.SELECT_ONE
         elif self.method_name.startswith("find_by"):
             pattern = r"find_by_(.*)"
             is_one = True
+            query_type = QueryType.SELECT_ONE
         elif self.method_name.startswith("find_all_by"):
             pattern = r"find_all_by_(.*)"
+            query_type = QueryType.SELECT_MANY
         elif self.method_name.startswith("get_all_by"):
             pattern = r"get_all_by_(.*)"
+            query_type = QueryType.SELECT_MANY
 
         if len(pattern) == 0:
-            raise ValueError(f"Method name must start with 'get_by', 'find_by', 'find_all_by', or 'get_all_by': {self.method_name}")
+            raise ValueError(
+                f"Method name must start with 'get_by', 'find_by', 'find_all_by', 'get_all_by', "
+                f"'count_by', 'exists_by', 'delete_by', or 'delete_all_by': {self.method_name}"
+            )
 
         match = re.match(pattern, self.method_name)
         if not match:
             raise ValueError(f"Invalid method name: {self.method_name}")
 
         raw_query = match.group(1)
-        # Split fields by '_and_' or '_or_' and keep logical operators
         raw_query_list = re.split(r"(_and_|_or_)", raw_query)
 
-        # Extract required fields and detect operations
         required_fields = []
         field_operations = {}
-        
+        null_check_fields = []
+
         for field in raw_query_list:
             if field not in ["_and_", "_or_"]:
-                # Check for field operations
                 operation = self._detect_field_operation(field)
                 if operation:
                     base_field = self._extract_base_field(field, operation)
-                    required_fields.append(base_field)
                     field_operations[base_field] = operation
+                    if operation == FieldOperation.BETWEEN:
+                        required_fields.append(f"min_{base_field}")
+                        required_fields.append(f"max_{base_field}")
+                    elif operation in (FieldOperation.IS_NULL, FieldOperation.IS_NOT_NULL):
+                        null_check_fields.append(base_field)
+                    else:
+                        required_fields.append(base_field)
                 else:
                     required_fields.append(field)
 
@@ -110,45 +138,38 @@ class _MetodQueryBuilder:
                 ConditionNotation(notation) for notation in raw_query_list if notation in ["_and_", "_or_"]
             ],
             field_operations=field_operations,
+            query_type=query_type,
+            null_check_fields=null_check_fields,
         )
+
     def _detect_field_operation(self, field: str) -> FieldOperation | None:
-        """
-        Detect field operation based on field suffix.
-        
-        Args:
-            field: The field name with potential operation suffix
-            
-        Returns:
-            FieldOperation if detected, None if no operation suffix found
-        """
+        """Detect field operation based on field suffix. Order matters - longer suffixes first."""
         operation_suffixes = {
-            "_not_in": FieldOperation.NOT_IN, # _not_in should be check before _in for preventing false positive
+            "_is_not_null": FieldOperation.IS_NOT_NULL,
+            "_is_null": FieldOperation.IS_NULL,
+            "_not_like": FieldOperation.NOT_LIKE,
+            "_not_in": FieldOperation.NOT_IN,
+            "_starts_with": FieldOperation.STARTS_WITH,
+            "_ends_with": FieldOperation.ENDS_WITH,
+            "_contains": FieldOperation.CONTAINS,
+            "_between": FieldOperation.BETWEEN,
             "_in": FieldOperation.IN,
-            "_gt": FieldOperation.GREATER_THAN,
             "_gte": FieldOperation.GREATER_EQUAL,
-            "_lt": FieldOperation.LESS_THAN,
+            "_gt": FieldOperation.GREATER_THAN,
             "_lte": FieldOperation.LESS_EQUAL,
+            "_lt": FieldOperation.LESS_THAN,
             "_like": FieldOperation.LIKE,
             "_ne": FieldOperation.NOT_EQUALS,
         }
-        
+
         for suffix, operation in operation_suffixes.items():
             if field.endswith(suffix):
                 return operation
-        
+
         return None
 
     def _extract_base_field(self, field: str, operation: FieldOperation) -> str:
-        """
-        Extract the base field name by removing the operation suffix.
-        
-        Args:
-            field: The field name with operation suffix
-            operation: The detected field operation
-            
-        Returns:
-            The base field name without operation suffix
-        """
+        """Extract the base field name by removing the operation suffix."""
         operation_suffixes = {
             FieldOperation.IN: "_in",
             FieldOperation.GREATER_THAN: "_gt",
@@ -158,7 +179,14 @@ class _MetodQueryBuilder:
             FieldOperation.LIKE: "_like",
             FieldOperation.NOT_EQUALS: "_ne",
             FieldOperation.NOT_IN: "_not_in",
+            FieldOperation.BETWEEN: "_between",
+            FieldOperation.IS_NULL: "_is_null",
+            FieldOperation.IS_NOT_NULL: "_is_not_null",
+            FieldOperation.STARTS_WITH: "_starts_with",
+            FieldOperation.ENDS_WITH: "_ends_with",
+            FieldOperation.CONTAINS: "_contains",
+            FieldOperation.NOT_LIKE: "_not_like",
         }
-        
+
         suffix = operation_suffixes[operation]
         return field[:-len(suffix)]

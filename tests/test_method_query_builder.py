@@ -1,6 +1,6 @@
 import pytest
 
-from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.method_query_builder import _MetodQueryBuilder, _Query, FieldOperation
+from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.method_query_builder import _MetodQueryBuilder, _Query, FieldOperation, QueryType
 
 
 class TestMetodQueryBuilder:
@@ -111,6 +111,104 @@ class TestMetodQueryBuilder:
                 ["_and_"],
                 {"age": FieldOperation.GREATER_THAN, "status": FieldOperation.IN},
             ),
+            # New prefixes
+            (
+                "count_by_status",
+                ["status"],
+                True,
+                ["status"],
+                [],
+                {},
+            ),
+            (
+                "count_by_name_and_age",
+                ["name", "_and_", "age"],
+                True,
+                ["name", "age"],
+                ["_and_"],
+                {},
+            ),
+            (
+                "exists_by_email",
+                ["email"],
+                True,
+                ["email"],
+                [],
+                {},
+            ),
+            (
+                "delete_by_status",
+                ["status"],
+                True,
+                ["status"],
+                [],
+                {},
+            ),
+            (
+                "delete_all_by_status_and_category",
+                ["status", "_and_", "category"],
+                False,
+                ["status", "category"],
+                ["_and_"],
+                {},
+            ),
+            # New field operations
+            (
+                "find_all_by_age_between",
+                ["age_between"],
+                False,
+                ["min_age", "max_age"],
+                [],
+                {"age": FieldOperation.BETWEEN},
+            ),
+            (
+                "find_all_by_name_is_null",
+                ["name_is_null"],
+                False,
+                [],
+                [],
+                {"name": FieldOperation.IS_NULL},
+            ),
+            (
+                "find_all_by_name_is_not_null",
+                ["name_is_not_null"],
+                False,
+                [],
+                [],
+                {"name": FieldOperation.IS_NOT_NULL},
+            ),
+            (
+                "find_all_by_name_starts_with",
+                ["name_starts_with"],
+                False,
+                ["name"],
+                [],
+                {"name": FieldOperation.STARTS_WITH},
+            ),
+            (
+                "find_all_by_name_ends_with",
+                ["name_ends_with"],
+                False,
+                ["name"],
+                [],
+                {"name": FieldOperation.ENDS_WITH},
+            ),
+            (
+                "find_all_by_name_contains",
+                ["name_contains"],
+                False,
+                ["name"],
+                [],
+                {"name": FieldOperation.CONTAINS},
+            ),
+            (
+                "find_all_by_name_not_like",
+                ["name_not_like"],
+                False,
+                ["name"],
+                [],
+                {"name": FieldOperation.NOT_LIKE},
+            ),
         ],
     )
     def test_parse_query(
@@ -138,11 +236,53 @@ class TestMetodQueryBuilder:
             builder = _MetodQueryBuilder(invalid_method_name)
             builder.parse_query()
 
-        assert "Method name must start with 'get_by', 'find_by', 'find_all_by', or 'get_all_by" in str(excinfo.value)
+        assert "Method name must start with" in str(excinfo.value)
 
     def test_empty_method_name(self):
         with pytest.raises(ValueError) as excinfo:
             builder = _MetodQueryBuilder("")
             builder.parse_query()
 
-        assert "Method name must start with 'get_by', 'find_by', 'find_all_by', or 'get_all_by" in str(excinfo.value)
+        assert "Method name must start with" in str(excinfo.value)
+
+    # QueryType tests
+    def test_query_type_count_by(self):
+        query = _MetodQueryBuilder("count_by_status").parse_query()
+        assert query.query_type == QueryType.COUNT
+
+    def test_query_type_exists_by(self):
+        query = _MetodQueryBuilder("exists_by_email").parse_query()
+        assert query.query_type == QueryType.EXISTS
+
+    def test_query_type_delete_by(self):
+        query = _MetodQueryBuilder("delete_by_status").parse_query()
+        assert query.query_type == QueryType.DELETE
+
+    def test_query_type_delete_all_by(self):
+        query = _MetodQueryBuilder("delete_all_by_status").parse_query()
+        assert query.query_type == QueryType.DELETE
+
+    def test_query_type_find_by(self):
+        query = _MetodQueryBuilder("find_by_name").parse_query()
+        assert query.query_type == QueryType.SELECT_ONE
+
+    def test_query_type_find_all_by(self):
+        query = _MetodQueryBuilder("find_all_by_name").parse_query()
+        assert query.query_type == QueryType.SELECT_MANY
+
+    # Null check fields tests
+    def test_null_check_fields_is_null(self):
+        query = _MetodQueryBuilder("find_all_by_name_is_null").parse_query()
+        assert "name" in query.null_check_fields
+        assert "name" not in query.required_fields
+
+    def test_null_check_fields_is_not_null(self):
+        query = _MetodQueryBuilder("find_all_by_name_is_not_null").parse_query()
+        assert "name" in query.null_check_fields
+        assert "name" not in query.required_fields
+
+    def test_between_fields(self):
+        query = _MetodQueryBuilder("find_all_by_age_between").parse_query()
+        assert "min_age" in query.required_fields
+        assert "max_age" in query.required_fields
+        assert "age" not in query.required_fields
