@@ -1,12 +1,12 @@
-import pytest
+from typing import List, Optional
+
 from sqlalchemy import create_engine
-from sqlmodel import SQLModel, Field
-from typing import Optional, List
+from sqlmodel import Field, SQLModel
 
 from py_spring_model import PySpringModel
 from py_spring_model.core.session_context_holder import SessionContextHolder
-from py_spring_model.repository.crud_repository import CrudRepository
 from py_spring_model.py_spring_model_rest.service.query_service.query import Query
+from py_spring_model.repository.crud_repository import CrudRepository
 
 
 class QESUser(PySpringModel, table=True):

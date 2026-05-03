@@ -1,6 +1,6 @@
 import re
-from typing import Dict
 from enum import Enum
+from typing import Dict
 
 from pydantic import BaseModel
 
@@ -23,6 +23,7 @@ class FieldOperation(str, Enum):
     Enumeration of supported field operations for dynamic query generation.
     These operations define how a field should be queried in the database.
     """
+
     EQUALS = "equals"
     IN = "in"
     GREATER_THAN = "gt"
@@ -45,6 +46,7 @@ class _Query(BaseModel):
     """
     A data model representing a parsed query with fields, conditions, and operations.
     """
+
     raw_query_list: list[str]
     is_one_result: bool
     notations: list[ConditionNotation]
@@ -79,19 +81,21 @@ class _MetodQueryBuilder:
     }
 
     # Reverse lookup: FieldOperation -> suffix string.
-    _OPERATION_TO_SUFFIX: dict[FieldOperation, str] = {v: k for k, v in _OPERATION_SUFFIXES.items()}
+    _OPERATION_TO_SUFFIX: dict[FieldOperation, str] = {
+        v: k for k, v in _OPERATION_SUFFIXES.items()
+    }
 
     # (prefix, regex_pattern, is_one_result, query_type)
     # Order matters: longer prefixes must come before shorter ones (e.g. delete_all_by before delete_by).
     _PREFIX_RULES: list[tuple[str, str, bool, QueryType]] = [
-        ("count_by",      r"count_by_(.*)",      True,  QueryType.COUNT),
-        ("exists_by",     r"exists_by_(.*)",     True,  QueryType.EXISTS),
+        ("count_by", r"count_by_(.*)", True, QueryType.COUNT),
+        ("exists_by", r"exists_by_(.*)", True, QueryType.EXISTS),
         ("delete_all_by", r"delete_all_by_(.*)", False, QueryType.DELETE),
-        ("delete_by",     r"delete_by_(.*)",     True,  QueryType.DELETE),
-        ("get_by",        r"get_by_(.*)",        True,  QueryType.SELECT_ONE),
-        ("find_by",       r"find_by_(.*)",       True,  QueryType.SELECT_ONE),
-        ("find_all_by",   r"find_all_by_(.*)",   False, QueryType.SELECT_MANY),
-        ("get_all_by",    r"get_all_by_(.*)",    False, QueryType.SELECT_MANY),
+        ("delete_by", r"delete_by_(.*)", True, QueryType.DELETE),
+        ("get_by", r"get_by_(.*)", True, QueryType.SELECT_ONE),
+        ("find_by", r"find_by_(.*)", True, QueryType.SELECT_ONE),
+        ("find_all_by", r"find_all_by_(.*)", False, QueryType.SELECT_MANY),
+        ("get_all_by", r"get_all_by_(.*)", False, QueryType.SELECT_MANY),
     ]
 
     def __init__(self, method_name: str) -> None:
@@ -103,9 +107,7 @@ class _MetodQueryBuilder:
                 return pattern, is_one, query_type
 
         valid = ", ".join(f"'{p}'" for p, *_ in self._PREFIX_RULES)
-        raise ValueError(
-            f"Method name must start with {valid}: {self.method_name}"
-        )
+        raise ValueError(f"Method name must start with {valid}: {self.method_name}")
 
     def parse_query(self) -> _Query:
         """Parse a method name into a structured _Query.
@@ -160,7 +162,9 @@ class _MetodQueryBuilder:
             is_one_result=is_one,
             required_fields=required_fields,
             notations=[
-                ConditionNotation(notation) for notation in raw_query_list if notation in ("_and_", "_or_")
+                ConditionNotation(notation)
+                for notation in raw_query_list
+                if notation in ("_and_", "_or_")
             ],
             field_operations=field_operations,
             query_type=query_type,
@@ -175,4 +179,4 @@ class _MetodQueryBuilder:
 
     def _extract_base_field(self, field: str, operation: FieldOperation) -> str:
         suffix = self._OPERATION_TO_SUFFIX[operation]
-        return field[:-len(suffix)]
+        return field[: -len(suffix)]

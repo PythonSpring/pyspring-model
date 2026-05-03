@@ -6,7 +6,10 @@ from sqlalchemy import delete, func
 from sqlmodel import select
 
 from py_spring_model import PySpringModel
-from py_spring_model.core.session_context_holder import SessionContextHolder, Transactional
+from py_spring_model.core.session_context_holder import (
+    SessionContextHolder,
+    Transactional,
+)
 
 ID = TypeVar("ID", int, UUID)
 ModelT = TypeVar("ModelT", bound=PySpringModel)

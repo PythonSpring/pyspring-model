@@ -1,10 +1,11 @@
-import pytest
 from sqlalchemy import create_engine
-from sqlmodel import SQLModel, Field
+from sqlmodel import Field, SQLModel
 
 from py_spring_model import PySpringModel
 from py_spring_model.core.session_context_holder import SessionContextHolder
-from py_spring_model.py_spring_model_rest.service.py_spring_model_rest_service import PySpringModelRestService
+from py_spring_model.py_spring_model_rest.service.py_spring_model_rest_service import (
+    PySpringModelRestService,
+)
 
 
 class RestUser(PySpringModel, table=True):
