@@ -8,6 +8,7 @@ class NestedHandler:
     def handle(self, func: Callable, *args: Any, **kwargs: Any) -> Any:
         if SessionContextHolder.has_active_transaction():
             state = SessionContextHolder.current_state()
+            assert state is not None and state.session is not None
             nested_txn = state.session.begin_nested()
             try:
                 result = func(*args, **kwargs)

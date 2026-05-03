@@ -8,6 +8,7 @@ class RequiredHandler:
     def handle(self, func: Callable, *args: Any, **kwargs: Any) -> Any:
         if SessionContextHolder.has_active_transaction():
             state = SessionContextHolder.current_state()
+            assert state is not None
             state.depth += 1
             try:
                 return func(*args, **kwargs)

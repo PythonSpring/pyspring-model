@@ -11,6 +11,7 @@ class MandatoryHandler:
                 "MANDATORY propagation requires an existing active transaction"
             )
         state = SessionContextHolder.current_state()
+        assert state is not None
         state.depth += 1
         try:
             return func(*args, **kwargs)
