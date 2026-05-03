@@ -21,7 +21,7 @@ build-backend = "pdm.backend"
 
 [tool.pdm]
 distribution = true
-version = { source = "file", path = "py_spring_model/__init__.py" }
+version = { source = "file", path = "py_spring_model/__version__.py" }
 
 # pdm install -d
 [tool.pdm.dev-dependencies]
