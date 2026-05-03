@@ -2,7 +2,8 @@ from typing import Optional, Type, TypeVar
 from uuid import UUID
 
 from py_spring_core import Component
-from sqlalchemy import func
+from sqlalchemy import delete, func
+from sqlmodel import select
 
 from py_spring_model import PySpringModel
 from py_spring_model.core.session_context_holder import SessionContextHolder, Transactional
@@ -28,14 +29,16 @@ class PySpringModelRestService(Component):
     @Transactional
     def get_all_by_ids(self, model_type: Type[ModelT], ids: list[ID]) -> list[ModelT]:
         session = SessionContextHolder.get_or_create_session()
-        return session.query(model_type).filter(model_type.id.in_(ids)).all()  # type: ignore
+        statement = select(model_type).where(model_type.id.in_(ids))  # type: ignore
+        return list(session.exec(statement).all())
 
     @Transactional
     def get_all(
         self, model_type: Type[ModelT], limit: int, offset: int
     ) -> list[ModelT]:
         session = SessionContextHolder.get_or_create_session()
-        return session.query(model_type).offset(offset).limit(limit).all()
+        statement = select(model_type).offset(offset).limit(limit)
+        return list(session.exec(statement).all())
 
     @Transactional
     def create(self, model: ModelT) -> ModelT:
@@ -62,12 +65,14 @@ class PySpringModelRestService(Component):
     @Transactional
     def delete(self, model_type: Type[ModelT], id: ID) -> None:
         session = SessionContextHolder.get_or_create_session()
-        session.query(model_type).filter(model_type.id == id).delete()  # type: ignore
+        statement = delete(model_type).where(model_type.id == id)  # type: ignore
+        session.execute(statement)
 
     @Transactional
     def count(self, model_type: Type[ModelT]) -> int:
         session = SessionContextHolder.get_or_create_session()
-        return session.query(func.count()).select_from(model_type).scalar()
+        statement = select(func.count()).select_from(model_type)
+        return session.exec(statement).one()
 
     @Transactional
     def batch_create(self, models: list[ModelT]) -> list[ModelT]:
@@ -78,4 +83,5 @@ class PySpringModelRestService(Component):
     @Transactional
     def batch_delete(self, model_type: Type[ModelT], ids: list[ID]) -> None:
         session = SessionContextHolder.get_or_create_session()
-        session.query(model_type).filter(model_type.id.in_(ids)).delete(synchronize_session='fetch')  # type: ignore
+        statement = delete(model_type).where(model_type.id.in_(ids))  # type: ignore
+        session.execute(statement)
