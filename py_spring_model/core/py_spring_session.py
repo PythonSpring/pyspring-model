@@ -38,7 +38,8 @@ class PySpringSession(Session):
     def commit(self) -> None:
         # Import here to avoid circular import
         from py_spring_model.core.session_context_holder import SessionContextHolder
-        if SessionContextHolder.is_transaction_managed():
+        state = SessionContextHolder.current_state()
+        if state is not None and state.depth > 1:
             logger.warning("Commiting a transaction that is currently being managed by the outermost transaction is strongly discouraged...")
             return
         super().commit()
