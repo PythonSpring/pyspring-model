@@ -113,7 +113,7 @@ class TestSessionContextHolderStack:
     def test_clear_session_alias_works(self):
         session = MagicMock()
         SessionContextHolder.push_state(TransactionState(session=session, depth=1))
-        SessionContextHolder.clear_session()
+        SessionContextHolder.clear()
         assert SessionContextHolder.current_state() is None
         session.close.assert_called_once()
 

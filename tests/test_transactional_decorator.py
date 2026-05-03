@@ -28,14 +28,14 @@ class TestTransactionalDecorator:
         PySpringModel.set_models([TransactionalTestUser])
         
         # Clear any existing session
-        SessionContextHolder.clear_session()
+        SessionContextHolder.clear()
         
         SQLModel.metadata.create_all(self.engine)
 
     def teardown_method(self):
         """Tear down test environment"""
         SQLModel.metadata.drop_all(self.engine)
-        SessionContextHolder.clear_session()
+        SessionContextHolder.clear()
         PySpringModel._engine = None
         PySpringModel._metadata = None
         PySpringModel._connection = None

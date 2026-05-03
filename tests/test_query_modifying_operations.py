@@ -92,7 +92,7 @@ class TestQueryModifyingOperations:
         PySpringModel.set_engine(self.engine)
         PySpringModel.set_metadata(SQLModel.metadata)
         PySpringModel.set_models([TestUser])
-        SessionContextHolder.clear_session()
+        SessionContextHolder.clear()
         SQLModel.metadata.create_all(self.engine)
         self.repository = TestUserRepository()
        
@@ -102,7 +102,7 @@ class TestQueryModifyingOperations:
         """Clean up test environment"""
         logger.info("Tearing down test environment...")
         SQLModel.metadata.drop_all(self.engine)
-        SessionContextHolder.clear_session()
+        SessionContextHolder.clear()
     
     def test_insert_with_commit_true(self):
         """Test INSERT operation with is_modifying=True (should commit)"""

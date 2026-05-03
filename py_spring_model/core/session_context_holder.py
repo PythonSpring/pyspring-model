@@ -116,8 +116,3 @@ class SessionContextHolder:
             if state.session is not None:
                 state.session.close()
         stack.clear()
-
-    @classmethod
-    def clear_session(cls) -> None:
-        """Backward-compatible alias for clear()."""
-        cls.clear()

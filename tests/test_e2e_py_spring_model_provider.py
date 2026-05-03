@@ -102,7 +102,7 @@ def _run_app(config_path: str):
 
 def _cleanup(tmpdir: str):
     """Reset all global state that PySpringModelProvider sets."""
-    SessionContextHolder.clear_session()
+    SessionContextHolder.clear()
 
     # Close RepositoryBase connection before resetting
     if RepositoryBase.connection is not None:

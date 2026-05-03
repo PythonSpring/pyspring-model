@@ -29,7 +29,7 @@ async def session_middleware(request: Request, call_next: Callable[[Request], Aw
         response = await call_next(request)
         return response
     finally:
-        SessionContextHolder.clear_session()
+        SessionContextHolder.clear()
 
 class SessionController(RestController):
     def post_construct(self) -> None:
