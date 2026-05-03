@@ -11,7 +11,7 @@ from typing import (
 )
 from uuid import UUID
 
-from sqlalchemy import Select
+from sqlalchemy import Select, func
 from sqlmodel import Session, select
 from sqlmodel.sql.expression import Select, SelectOfScalar
 
@@ -176,6 +176,24 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
         for entity in deleted_entities:
             session.delete(entity)
         return True
+
+    @Transactional
+    def count(self) -> int:
+        session = SessionContextHolder.get_or_create_session()
+        statement = select(func.count()).select_from(self.model_class)
+        return session.exec(statement).one()
+
+    @Transactional
+    def count_by(self, query_by: dict[str, Any]) -> int:
+        session = SessionContextHolder.get_or_create_session()
+        statement = select(func.count()).select_from(self.model_class).filter_by(**query_by)
+        return session.exec(statement).one()
+
+    @Transactional
+    def exists_by_id(self, id: ID) -> bool:
+        session = SessionContextHolder.get_or_create_session()
+        statement = select(func.count()).select_from(self.model_class).where(self.model_class.id == id)
+        return session.exec(statement).one() > 0
 
     @Transactional
     def upsert(self, entity: T, query_by: dict[str, Any]) -> T:

@@ -158,3 +158,27 @@ class TestCrudRepository:
 
     def test_delete_user_with_user_not_found(self, user_repository: UserRepository):
         assert user_repository.delete(User(id=1, name="John Doe", email="john@example.com")) is False
+
+    def test_count_empty(self, user_repository: UserRepository):
+        assert user_repository.count() == 0
+
+    def test_count_with_data(self, user_repository: UserRepository):
+        self.create_test_user(user_repository)
+        assert user_repository.count() == 1
+        user_repository.save(User(name="Jane", email="jane@example.com"))
+        assert user_repository.count() == 2
+
+    def test_count_by(self, user_repository: UserRepository):
+        user_repository.save(User(name="John", email="john@example.com"))
+        user_repository.save(User(name="John", email="john2@example.com"))
+        user_repository.save(User(name="Jane", email="jane@example.com"))
+        assert user_repository.count_by({"name": "John"}) == 2
+        assert user_repository.count_by({"name": "Jane"}) == 1
+        assert user_repository.count_by({"name": "Nobody"}) == 0
+
+    def test_exists_by_id_found(self, user_repository: UserRepository):
+        self.create_test_user(user_repository)
+        assert user_repository.exists_by_id(1) is True
+
+    def test_exists_by_id_not_found(self, user_repository: UserRepository):
+        assert user_repository.exists_by_id(999) is False
