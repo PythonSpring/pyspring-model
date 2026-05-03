@@ -5,6 +5,7 @@ from sqlmodel import Field, SQLModel
 
 from py_spring_model import PySpringModel
 from py_spring_model.core.session_context_holder import SessionContextHolder, Transactional
+from py_spring_model.core.propagation import Propagation, TransactionRequiredError, ExistingTransactionError
 
 
 class TransactionalTestUser(PySpringModel, table=True):
@@ -27,14 +28,14 @@ class TestTransactionalDecorator:
         PySpringModel.set_models([TransactionalTestUser])
         
         # Clear any existing session
-        SessionContextHolder.clear_session()
+        SessionContextHolder.clear()
         
         SQLModel.metadata.create_all(self.engine)
 
     def teardown_method(self):
         """Tear down test environment"""
         SQLModel.metadata.drop_all(self.engine)
-        SessionContextHolder.clear_session()
+        SessionContextHolder.clear()
         PySpringModel._engine = None
         PySpringModel._metadata = None
         PySpringModel._connection = None
@@ -353,4 +354,99 @@ class TestTransactionalDecorator:
         
         # Only the outermost transaction should rollback
         assert len(commit_calls) == 0
-        assert len(rollback_calls) == 1 
+        assert len(rollback_calls) == 1
+
+    def test_bare_transactional_still_works(self):
+        """@Transactional without arguments still works as REQUIRED."""
+        @Transactional
+        def simple_op():
+            session = SessionContextHolder.get_or_create_session()
+            user = TransactionalTestUser(name="Bare", email="bare@test.com", age=1)
+            session.add(user)
+            session.flush()
+            return user
+
+        result = simple_op()
+        assert result.name == "Bare"
+        assert not SessionContextHolder.has_session()
+
+    def test_parameterized_required(self):
+        """@Transactional(propagation=Propagation.REQUIRED) works."""
+        @Transactional(propagation=Propagation.REQUIRED)
+        def create():
+            session = SessionContextHolder.get_or_create_session()
+            user = TransactionalTestUser(name="ParamReq", email="pr@test.com", age=2)
+            session.add(user)
+            session.flush()
+            return user
+
+        result = create()
+        assert result.name == "ParamReq"
+
+        with PySpringModel.create_managed_session() as session:
+            users = session.execute(text("SELECT * FROM transactionaltestuser WHERE name='ParamReq'")).fetchall()
+            assert len(users) == 1
+
+    def test_parameterized_requires_new(self):
+        """@Transactional(propagation=Propagation.REQUIRES_NEW) creates independent session."""
+        captured_sessions = []
+
+        @Transactional
+        def outer():
+            outer_session = SessionContextHolder.get_or_create_session()
+            captured_sessions.append(("outer", outer_session))
+            inner()
+
+        @Transactional(propagation=Propagation.REQUIRES_NEW)
+        def inner():
+            inner_session = SessionContextHolder.get_or_create_session()
+            captured_sessions.append(("inner", inner_session))
+
+        outer()
+
+        # REQUIRES_NEW must create a different session from the outer
+        assert len(captured_sessions) == 2
+        assert captured_sessions[0][0] == "outer"
+        assert captured_sessions[1][0] == "inner"
+        assert captured_sessions[0][1] is not captured_sessions[1][1]
+        assert not SessionContextHolder.has_session()
+
+    def test_parameterized_mandatory_raises(self):
+        """@Transactional(propagation=Propagation.MANDATORY) raises without existing txn."""
+        @Transactional(propagation=Propagation.MANDATORY)
+        def needs_txn():
+            return "should not reach"
+
+        with pytest.raises(TransactionRequiredError):
+            needs_txn()
+
+    def test_parameterized_never_raises_with_txn(self):
+        """@Transactional(propagation=Propagation.NEVER) raises when txn exists."""
+        @Transactional(propagation=Propagation.NEVER)
+        def no_txn_allowed():
+            return "ok without txn"
+
+        # Works without transaction
+        assert no_txn_allowed() == "ok without txn"
+
+        # Fails with transaction
+        @Transactional
+        def outer():
+            @Transactional(propagation=Propagation.NEVER)
+            def inner():
+                return "should not reach"
+            return inner()
+
+        with pytest.raises(ExistingTransactionError):
+            outer()
+
+    def test_parameterized_preserves_function_metadata(self):
+        """Parameterized @Transactional preserves function name and docstring."""
+        @Transactional(propagation=Propagation.SUPPORTS)
+        def documented(x: int) -> str:
+            """A documented function."""
+            return str(x)
+
+        assert documented.__name__ == "documented"
+        assert "documented function" in documented.__doc__
+        assert documented(42) == "42"

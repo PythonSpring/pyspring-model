@@ -20,13 +20,13 @@ class TestCrudRepository:
         logger.info("Setting up test environment...")
         self.engine = create_engine("sqlite:///:memory:", echo=True)
         PySpringModel._engine = self.engine
-        SessionContextHolder.clear_session()
+        SessionContextHolder.clear()
         SQLModel.metadata.create_all(self.engine)
 
     def teardown_method(self):
         logger.info("Tearing down test environment...")
         SQLModel.metadata.drop_all(self.engine)
-        SessionContextHolder.clear_session()
+        SessionContextHolder.clear()
 
     @pytest.fixture
     def user_repository(self):

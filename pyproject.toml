@@ -6,7 +6,7 @@ authors = [
     {name = "William Chen", email = "ow6201231@gmail.com"},
 ]
 dependencies = [
-    "py-spring-core>=0.3.4",
+    "py-spring-core>=0.3.5",
     "sqlmodel>=0.0.38",
 ]
 
@@ -21,7 +21,7 @@ build-backend = "pdm.backend"
 
 [tool.pdm]
 distribution = true
-version = { source = "file", path = "py_spring_model/__init__.py" }
+version = { source = "file", path = "py_spring_model/__version__.py" }
 
 # pdm install -d
 [tool.pdm.dev-dependencies]
