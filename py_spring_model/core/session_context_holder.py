@@ -1,7 +1,7 @@
 from contextvars import ContextVar
 from dataclasses import dataclass
 from functools import wraps
-from typing import Callable, ClassVar, Optional, ParamSpec, TypeVar
+from typing import Callable, ClassVar, Optional, ParamSpec, TypeVar, Union
 
 from py_spring_model.core.model import PySpringModel
 from py_spring_model.core.py_spring_session import PySpringSession
@@ -17,43 +17,39 @@ P = ParamSpec("P")
 RT = TypeVar("RT")
 
 
-def Transactional(func: Callable[P, RT]) -> Callable[P, RT]:
+def Transactional(
+    func: Optional[Callable[P, RT]] = None,
+    *,
+    propagation: Optional["_Propagation"] = None,
+) -> Union[Callable[P, RT], Callable[[Callable[P, RT]], Callable[P, RT]]]:
     """
-    Decorator for managing database transactions.
+    Decorator for managing database transactions with propagation support.
 
-    Supports both bare usage (@Transactional) and parameterized usage
-    (@Transactional(propagation=Propagation.REQUIRES_NEW)).
+    Supports both bare and parameterized usage:
+        @Transactional
+        def create_user(): ...
 
-    When used bare, defaults to REQUIRED propagation: joins an existing
-    transaction if one exists, or creates a new one if not.
+        @Transactional(propagation=Propagation.REQUIRES_NEW)
+        def write_audit(): ...
     """
-    @wraps(func)
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> RT:
-        # Inline REQUIRED logic — will be replaced by TransactionManager in Task 12
-        current = SessionContextHolder.current_state()
-        if current is not None and current.session is not None and current.depth >= 1:
-            # Join existing transaction
-            current.depth += 1
-            try:
-                return func(*args, **kwargs)
-            finally:
-                current.depth -= 1
-        else:
-            # Create new transaction
-            session = PySpringModel.create_session()
-            state = TransactionState(session=session, depth=1)
-            SessionContextHolder.push_state(state)
-            try:
-                result = func(*args, **kwargs)
-                session.commit()
-                return result
-            except Exception:
-                session.rollback()
-                raise
-            finally:
-                session.close()
-                SessionContextHolder.pop_state()
-    return wrapper
+    from py_spring_model.core.propagation import Propagation
+    from py_spring_model.core.transaction_manager import TransactionManager
+
+    resolved_propagation = propagation if propagation is not None else Propagation.REQUIRED
+
+    def decorator(fn: Callable[P, RT]) -> Callable[P, RT]:
+        @wraps(fn)
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> RT:
+            return TransactionManager.execute(fn, resolved_propagation, *args, **kwargs)
+        return wrapper
+
+    if func is not None:
+        return decorator(func)
+    return decorator
+
+
+# Type alias for forward reference (avoids circular import at module level)
+_Propagation = "Propagation"
 
 
 class SessionContextHolder:
