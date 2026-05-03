@@ -32,6 +32,13 @@ class TestUserRepository(CrudRepository[int, TestUser]):
     def find_all_by_age_gt_and_status_in(self, age: int, status: list[str]) -> list[TestUser]: ...
     def find_all_by_salary_gte_or_category_in(self, salary: float, category: list[str]) -> list[TestUser]: ...
 
+    # New field operations
+    def find_all_by_age_between(self, min_age: int, max_age: int) -> list[TestUser]: ...
+    def find_all_by_name_starts_with(self, name: str) -> list[TestUser]: ...
+    def find_all_by_name_ends_with(self, name: str) -> list[TestUser]: ...
+    def find_all_by_name_contains(self, name: str) -> list[TestUser]: ...
+    def find_all_by_name_not_like(self, name: str) -> list[TestUser]: ...
+
 
 class TestFieldOperations:
     def setup_method(self):
@@ -149,6 +156,34 @@ class TestFieldOperations:
         """Test that NOT IN operation requires collection type"""
         with pytest.raises(ValueError, match=".*collection.*"):
             self.repository.find_all_by_category_not_in(category="employee")  # type: ignore # Should be list
+
+    def test_between_operation(self):
+        users = self.repository.find_all_by_age_between(min_age=25, max_age=35)
+        assert len(users) == 3  # 25, 30, 35
+        for user in users:
+            assert 25 <= user.age <= 35
+
+    def test_starts_with_operation(self):
+        users = self.repository.find_all_by_name_starts_with(name="John")
+        assert len(users) == 1
+        assert users[0].name == "John Doe"
+
+    def test_ends_with_operation(self):
+        users = self.repository.find_all_by_name_ends_with(name="Smith")
+        assert len(users) == 1
+        assert users[0].name == "Jane Smith"
+
+    def test_contains_operation(self):
+        users = self.repository.find_all_by_name_contains(name="ohn")
+        assert len(users) == 2  # John Doe, Bob Johnson
+        for user in users:
+            assert "ohn" in user.name
+
+    def test_not_like_operation(self):
+        users = self.repository.find_all_by_name_not_like(name="%John%")
+        assert len(users) == 3  # Jane Smith, Alice Brown, Charlie Wilson
+        for user in users:
+            assert "John" not in user.name
 
     def test_field_operation_enum_values(self):
         """Test that FieldOperation enum has correct values"""

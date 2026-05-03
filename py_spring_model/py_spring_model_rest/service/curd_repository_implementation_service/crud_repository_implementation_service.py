@@ -12,7 +12,7 @@ from typing import (
 from loguru import logger
 from py_spring_core import Component
 from pydantic import BaseModel
-from sqlalchemy import ColumnElement
+from sqlalchemy import ColumnElement, delete, func
 from sqlalchemy.sql import and_, or_
 from sqlmodel import select
 from sqlmodel.sql.expression import SelectOfScalar
@@ -24,7 +24,8 @@ from py_spring_model.py_spring_model_rest.service.curd_repository_implementation
     _MetodQueryBuilder,
     _Query,
     FieldOperation,
-    ConditionNotation
+    ConditionNotation,
+    QueryType,
 )
 
 PySpringModelT = TypeVar("PySpringModelT", bound=PySpringModel)
@@ -33,13 +34,10 @@ PySpringModelT = TypeVar("PySpringModelT", bound=PySpringModel)
 class CrudRepositoryImplementationService:
     """
     The `CrudRepositoryImplementationService` class is responsible for implementing the query logic for the `CrudRepository` inheritors.
-    It dynamically generates wrapper methods for the additional methods (those starting with `get_by`, `find_by`, `get_all_by`, or `find_all_by`) defined in the `CrudRepository` inheritors. These wrapper methods handle the required field validation and execute the dynamically built queries using the `find_by` method.
-    The `find_by` method dynamically builds a query based on the provided conditions and field values, and executes the query using the SQLModel session.
-    It supports both single-result and multi-result queries.
+    It dynamically generates wrapper methods for the additional methods defined in the `CrudRepository` inheritors.
     """
 
     skip_functions: ClassVar[set[str]] = set()
-
 
     @classmethod
     def add_skip_function(cls, func_name: str) -> None:
@@ -67,6 +65,10 @@ class CrudRepositoryImplementationService:
                 or method_name.startswith("find_by")
                 or method_name.startswith("get_all_by")
                 or method_name.startswith("find_all_by")
+                or method_name.startswith("count_by")
+                or method_name.startswith("exists_by")
+                or method_name.startswith("delete_by")
+                or method_name.startswith("delete_all_by")
             )
         ]
 
@@ -94,7 +96,6 @@ class CrudRepositoryImplementationService:
             if RETURN_KEY in copy_annotations:
                 copy_annotations.pop(RETURN_KEY)
 
-            # Create parameter to field mapping for better API design
             param_to_field_mapping = self._create_parameter_field_mapping(
                 list(copy_annotations.keys()), query.required_fields
             )
@@ -103,8 +104,7 @@ class CrudRepositoryImplementationService:
                 raise ValueError(
                     f"Invalid number of annotations. Expected {query.required_fields}, received {list(copy_annotations.keys())}."
                 )
-            
-            # Create a wrapper for the current method and query
+
             wrapped_method = self.create_implementation_wrapper(query, model_type, copy_annotations, param_to_field_mapping)
             logger.info(
                 f"Binding method: {method} to {repository_type}, with query: {query}"
@@ -114,48 +114,28 @@ class CrudRepositoryImplementationService:
     def _create_parameter_field_mapping(self, param_names: list[str], field_names: list[str]) -> dict[str, str]:
         """
         Create a mapping between parameter names and field names.
-        
-        Supports exact matching and common plural-to-singular mapping:
-        - Exact match: 'name' -> 'name'
-        - Plural to singular: 'names' -> 'name', 'ages' -> 'age'
-        
-        Rules:
-        1. Parameter names must match field names exactly, OR
-        2. Parameter names can be plural forms of field names (add 's')
-        3. No ambiguity allowed (e.g., can't have both 'name' and 'names' as fields)
-        
-        Examples:
-        - param_names: ['name', 'age'], field_names: ['name', 'age'] -> {'name': 'name', 'age': 'age'}
-        - param_names: ['names', 'ages'], field_names: ['name', 'age'] -> {'names': 'name', 'ages': 'age'}
-        - param_names: ['name', 'ages'], field_names: ['name', 'age'] -> {'name': 'name', 'ages': 'age'}
+        Supports exact matching and common plural-to-singular mapping.
         """
         mapping = {}
         unmatched_params = []
-        
-        # Create a set of field names for efficient lookup
+
         field_set = set(field_names)
-        
+
         for param_name in param_names:
-            # Try exact match first
             if param_name in field_set:
                 mapping[param_name] = param_name
                 continue
-            
-            # Try plural-to-singular mapping (only if param ends with 's' and is longer than 1 char)
+
             if param_name.endswith('s') and len(param_name) > 1:
-                # Handle special cases for words ending with 's'
-                singular_candidate = self._cast_plural_to_singular(param_name)            
+                singular_candidate = self._cast_plural_to_singular(param_name)
                 if singular_candidate in field_set:
-                    # Check for ambiguity: make sure we don't have both singular and plural forms as fields
                     plural_candidate = singular_candidate + 's'
                     if plural_candidate not in field_set:
                         mapping[param_name] = singular_candidate
                         continue
-            
-            # No match found
+
             unmatched_params.append(param_name)
-        
-        # Check if all parameters were mapped
+
         if unmatched_params:
             error_msg = "Parameter to field mapping failed:\n"
             error_msg += f"  Unmatched parameters: {unmatched_params}\n"
@@ -163,46 +143,48 @@ class CrudRepositoryImplementationService:
             error_msg += f"  Provided parameters: {param_names}\n"
             error_msg += "  Note: Parameters must exactly match field names or be plural forms (add 's')"
             raise ValueError(error_msg)
-        
+
         return mapping
-    
+
     def _cast_plural_to_singular(self, word: str) -> str:
         if word.endswith('ies'):
-            # words ending with 'ies' -> 'y' (e.g., 'categories' -> 'category')
             return word[:-3] + 'y'
         elif word.endswith('ses'):
-            # words ending with 'ses' -> 's' (e.g., 'statuses' -> 'status')
             return word[:-2]
         else:
-            # regular plural: remove 's'
             return word[:-1]
 
     def create_implementation_wrapper(self, query: _Query, model_type: Type[PySpringModel], original_func_annotations: dict[str, Any], param_to_field_mapping: dict[str, str]) -> Callable[..., Any]:
         def wrapper(*args, **kwargs) -> Any:
-            if len(query.required_fields) > 0:
-                # Simple mapping: parameter names must match field names exactly
-                field_kwargs = {}
-                for param_name, value in kwargs.items():
-                    if param_name in param_to_field_mapping:
-                        field_name = param_to_field_mapping[param_name]
-                        field_kwargs[field_name] = value
-                    else:
-                        raise ValueError(f"Unknown parameter '{param_name}'. Expected parameters: {list(param_to_field_mapping.keys())}")
+            field_kwargs = {}
+            for param_name, value in kwargs.items():
+                if param_name in param_to_field_mapping:
+                    field_name = param_to_field_mapping[param_name]
+                    field_kwargs[field_name] = value
+                else:
+                    raise ValueError(f"Unknown parameter '{param_name}'. Expected parameters: {list(param_to_field_mapping.keys())}")
 
-                # Execute the query
-                sql_statement = self._get_sql_statement(model_type, query, field_kwargs)
-                result = self._session_execute(sql_statement, query.is_one_result)
-                logger.info(f"Executing query with params: {kwargs}")
-                return result
-            else:
-                # No required fields, execute without parameters
-                sql_statement = self._get_sql_statement(model_type, query, {})
-                result = self._session_execute(sql_statement, query.is_one_result)
-                return result
+            filter_conditions = self._build_filter_conditions(model_type, query, field_kwargs)
+            combined_condition = self._combine_conditions_with_notations(filter_conditions, [ConditionNotation(notation) for notation in query.notations])
+
+            match query.query_type:
+                case QueryType.COUNT:
+                    return self._execute_count(model_type, combined_condition)
+                case QueryType.EXISTS:
+                    return self._execute_exists(model_type, combined_condition)
+                case QueryType.DELETE:
+                    return self._execute_delete(model_type, combined_condition)
+                case _:
+                    sql_statement = select(model_type)
+                    if combined_condition is not None:
+                        sql_statement = sql_statement.where(combined_condition)
+                    result = self._session_execute(sql_statement, query.is_one_result)
+                    logger.info(f"Executing query with params: {kwargs}")
+                    return result
 
         wrapper.__annotations__ = original_func_annotations
         return wrapper
-    
+
     def _get_sql_statement(
         self,
         model_type: Type[PySpringModelT],
@@ -212,7 +194,7 @@ class CrudRepositoryImplementationService:
         """Build SQL statement from parsed query and parameters."""
         filter_conditions = self._build_filter_conditions(model_type, parsed_query, params)
         combined_condition = self._combine_conditions_with_notations(filter_conditions, [ConditionNotation(notation) for notation in parsed_query.notations])
-        
+
         query = select(model_type)
         if combined_condition is not None:
             query = query.where(combined_condition)
@@ -226,15 +208,39 @@ class CrudRepositoryImplementationService:
     ) -> list[ColumnElement[bool]]:
         """Build individual filter conditions for each field."""
         filter_conditions = []
-        
+
         for field in parsed_query.required_fields:
+            # BETWEEN fields use min_/max_ prefixes - skip them here, handled below
+            if field.startswith("min_") or field.startswith("max_"):
+                continue
             column = getattr(model_type, field)
             optional_param_value = params.get(field, None)
             if optional_param_value is None:
                 raise ValueError(f"Required field '{field}' is missing or None in keyword arguments. All required fields must be provided with non-None values, getting {params}")
             condition = self._create_field_condition(column, field, optional_param_value, parsed_query.field_operations)
             filter_conditions.append(condition)
-        
+
+        # Handle BETWEEN fields
+        for field, operation in parsed_query.field_operations.items():
+            if operation == FieldOperation.BETWEEN:
+                column = getattr(model_type, field)
+                min_key = f"min_{field}"
+                max_key = f"max_{field}"
+                min_val = params.get(min_key)
+                max_val = params.get(max_key)
+                if min_val is None or max_val is None:
+                    raise ValueError(f"BETWEEN operation for field '{field}' requires both '{min_key}' and '{max_key}' parameters")
+                filter_conditions.append(column.between(min_val, max_val))
+
+        # Handle null check fields (IS_NULL, IS_NOT_NULL)
+        for field in parsed_query.null_check_fields:
+            column = getattr(model_type, field)
+            operation = parsed_query.field_operations[field]
+            if operation == FieldOperation.IS_NULL:
+                filter_conditions.append(column.is_(None))
+            elif operation == FieldOperation.IS_NOT_NULL:
+                filter_conditions.append(column.isnot(None))
+
         return filter_conditions
 
     def _create_field_condition(
@@ -247,9 +253,9 @@ class CrudRepositoryImplementationService:
         """Create a condition for a single field based on its operation type."""
         if field not in field_operations:
             return column == param_value
-        
+
         operation = field_operations[field]
-        
+
         match operation:
             case FieldOperation.IN:
                 return self._create_in_condition(column, param_value)
@@ -267,8 +273,15 @@ class CrudRepositoryImplementationService:
                 return column != param_value
             case FieldOperation.NOT_IN:
                 return self._create_not_in_condition(column, param_value)
+            case FieldOperation.STARTS_WITH:
+                return column.like(f"{param_value}%")
+            case FieldOperation.ENDS_WITH:
+                return column.like(f"%{param_value}")
+            case FieldOperation.CONTAINS:
+                return column.like(f"%{param_value}%")
+            case FieldOperation.NOT_LIKE:
+                return ~column.like(param_value)
             case _:
-                # Default to equality for unknown operations
                 return column == param_value
 
     def _create_in_condition(self, column: Any, param_value: Any) -> ColumnElement[bool]:
@@ -277,11 +290,10 @@ class CrudRepositoryImplementationService:
             raise ValueError(
                 f"Parameter for IN operation must be a collection (list, tuple, or set), got {type(param_value)}"
             )
-        
-        # Handle empty list case - return a condition that's always false
+
         if len(param_value) == 0:
             return column == None
-        
+
         return column.in_(param_value)
 
     def _create_not_in_condition(self, column: Any, param_value: Any) -> ColumnElement[bool]:
@@ -290,11 +302,10 @@ class CrudRepositoryImplementationService:
             raise ValueError(
                 f"Parameter for NOT IN operation must be a collection (list, tuple, or set), got {type(param_value)}"
             )
-        
-        # Handle empty list case - return a condition that's always true
+
         if len(param_value) == 0:
             return column != None
-        
+
         return ~column.in_(param_value)
 
     def _combine_conditions_with_notations(
@@ -305,17 +316,16 @@ class CrudRepositoryImplementationService:
         """Combine filter conditions using logical operators (AND/OR)."""
         if not filter_conditions:
             return None
-        
-        # Use stack-based approach to maintain original order
+
         condition_stack = filter_conditions.copy()
-        
+
         for notation in notations:
             if len(condition_stack) >= 2:
                 right_condition = condition_stack.pop(0)
                 left_condition = condition_stack.pop(0)
                 combined = self._apply_logical_operator(left_condition, right_condition, notation)
                 condition_stack.append(combined)
-        
+
         return condition_stack[0] if condition_stack else None
 
     def _apply_logical_operator(
@@ -330,7 +340,7 @@ class CrudRepositoryImplementationService:
                 return and_(left_condition, right_condition)
             case ConditionNotation.OR:
                 return or_(left_condition, right_condition)
-    
+
     @Transactional
     def _session_execute(self, statement: SelectOfScalar, is_one_result: bool) -> Any:
         session = SessionContextHolder.get_or_create_session()
@@ -341,6 +351,31 @@ class CrudRepositoryImplementationService:
             else session.exec(statement).fetchall()
         )
         return result
+
+    @Transactional
+    def _execute_count(self, model_type: Type[PySpringModelT], condition) -> int:
+        session = SessionContextHolder.get_or_create_session()
+        statement = select(func.count()).select_from(model_type)
+        if condition is not None:
+            statement = statement.where(condition)
+        return session.exec(statement).one()
+
+    @Transactional
+    def _execute_exists(self, model_type: Type[PySpringModelT], condition) -> bool:
+        session = SessionContextHolder.get_or_create_session()
+        statement = select(func.count()).select_from(model_type)
+        if condition is not None:
+            statement = statement.where(condition)
+        return session.exec(statement).one() > 0
+
+    @Transactional
+    def _execute_delete(self, model_type: Type[PySpringModelT], condition) -> int:
+        session = SessionContextHolder.get_or_create_session()
+        statement = delete(model_type)
+        if condition is not None:
+            statement = statement.where(condition)
+        result = session.execute(statement)
+        return result.rowcount
 
     def implement_query_for_all_crud_repository_inheritors(self) -> None:
         for crud_repository_cls in self.get_all_crud_repository_inheritors():
@@ -354,17 +389,9 @@ T = TypeVar("T", bound=BaseModel)
 RT = TypeVar("RT", bound=Union[T, None, list[T]])  # type: ignore
 
 
-
 def SkipAutoImplmentation(func: Callable[P, RT]) -> Callable[P, RT]:
     """
     Decorator to skip the auto implementation for a method.
-    The method will not be implemented automatically by the `CrudRepositoryImplementationService`.
-    The method should have the following signature:
-    ```python
-    @SkipAutoImplmentation
-    def get_user_by_email(self, email: str) -> Optional[UserRead]:
-        ...
-    ```
     """
     func_name = func.__qualname__
     logger.info(f"Skipping auto implementation for function: {func_name}")

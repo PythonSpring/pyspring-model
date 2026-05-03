@@ -240,3 +240,66 @@ class TestQuery:
         field_names = ['status']
         mapping = implementation_service._create_parameter_field_mapping(param_names, field_names)
         assert mapping == {'statuses': 'status'}
+
+
+class CountExistsDeleteUserRepository(CrudRepository[int, User]):
+    def count_by_status(self, status: str) -> int: ...
+    def exists_by_name(self, name: str) -> bool: ...
+    def delete_by_name(self, name: str) -> int: ...
+    def delete_all_by_status(self, status: str) -> int: ...
+
+
+class TestCountExistsDeleteExecution:
+    def setup_method(self):
+        self.engine = create_engine("sqlite:///:memory:", echo=False)
+        PySpringModel._engine = self.engine
+        SessionContextHolder.clear()
+        SQLModel.metadata.create_all(self.engine)
+
+    def teardown_method(self):
+        SQLModel.metadata.drop_all(self.engine)
+        SessionContextHolder.clear()
+
+    @pytest.fixture
+    def repo(self):
+        return CountExistsDeleteUserRepository()
+
+    @pytest.fixture
+    def service(self):
+        return CrudRepositoryImplementationService()
+
+    def test_count_by_execution(self, repo, service):
+        repo.save(User(name="John", email="j@e.com", status="active"))
+        repo.save(User(name="Jane", email="ja@e.com", status="active"))
+        repo.save(User(name="Bob", email="b@e.com", status="inactive"))
+        service._implemenmt_query(repo.__class__)
+        assert repo.count_by_status(status="active") == 2
+        assert repo.count_by_status(status="inactive") == 1
+        assert repo.count_by_status(status="unknown") == 0
+
+    def test_exists_by_execution(self, repo, service):
+        repo.save(User(name="John", email="j@e.com"))
+        service._implemenmt_query(repo.__class__)
+        assert repo.exists_by_name(name="John") is True
+        assert repo.exists_by_name(name="Nobody") is False
+
+    def test_delete_by_execution(self, repo, service):
+        repo.save(User(name="John", email="j@e.com"))
+        repo.save(User(name="Jane", email="ja@e.com"))
+        service._implemenmt_query(repo.__class__)
+        count = repo.delete_by_name(name="John")
+        assert count == 1
+        remaining = repo.find_all()
+        assert len(remaining) == 1
+        assert remaining[0].name == "Jane"
+
+    def test_delete_all_by_execution(self, repo, service):
+        repo.save(User(name="John", email="j@e.com", status="active"))
+        repo.save(User(name="Jane", email="ja@e.com", status="active"))
+        repo.save(User(name="Bob", email="b@e.com", status="inactive"))
+        service._implemenmt_query(repo.__class__)
+        count = repo.delete_all_by_status(status="active")
+        assert count == 2
+        remaining = repo.find_all()
+        assert len(remaining) == 1
+        assert remaining[0].name == "Bob"
