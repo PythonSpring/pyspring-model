@@ -23,6 +23,7 @@ from py_spring_model.repository.crud_repository import CrudRepository
 from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.method_query_builder import (
     _MetodQueryBuilder,
     _Query,
+    _FieldReference,
     FieldOperation,
     ConditionNotation,
     QueryType,
@@ -165,20 +166,25 @@ class CrudRepositoryImplementationService:
                 else:
                     raise ValueError(f"Unknown parameter '{param_name}'. Expected parameters: {list(param_to_field_mapping.keys())}")
 
-            filter_conditions = self._build_filter_conditions(model_type, query, field_kwargs)
+            filter_conditions, join_models = self._build_filter_conditions(model_type, query, field_kwargs)
             combined_condition = self._combine_conditions_with_notations(filter_conditions, [ConditionNotation(notation) for notation in query.notations])
+            has_joins = len(join_models) > 0
 
             match query.query_type:
                 case QueryType.COUNT:
-                    return self._execute_count(model_type, combined_condition)
+                    return self._execute_count(model_type, combined_condition, join_models)
                 case QueryType.EXISTS:
-                    return self._execute_exists(model_type, combined_condition)
+                    return self._execute_exists(model_type, combined_condition, join_models)
                 case QueryType.DELETE:
-                    return self._execute_delete(model_type, combined_condition)
+                    return self._execute_delete(model_type, combined_condition, join_models)
                 case _:
                     sql_statement = select(model_type)
+                    for join_model in join_models:
+                        sql_statement = sql_statement.join(join_model)
                     if combined_condition is not None:
                         sql_statement = sql_statement.where(combined_condition)
+                    if has_joins:
+                        sql_statement = sql_statement.distinct()
                     result = self._session_execute(sql_statement, query.is_one_result)
                     logger.info(f"Executing query with params: {kwargs}")
                     return result
@@ -193,28 +199,57 @@ class CrudRepositoryImplementationService:
         params: dict[str, Any],
     ) -> SelectOfScalar[PySpringModelT]:
         """Build SQL statement from parsed query and parameters."""
-        filter_conditions = self._build_filter_conditions(model_type, parsed_query, params)
+        filter_conditions, join_models = self._build_filter_conditions(model_type, parsed_query, params)
         combined_condition = self._combine_conditions_with_notations(filter_conditions, [ConditionNotation(notation) for notation in parsed_query.notations])
 
         query = select(model_type)
+        for join_model in join_models:
+            query = query.join(join_model)
         if combined_condition is not None:
             query = query.where(combined_condition)
+        if join_models:
+            query = query.distinct()
         return query
+
+    def _resolve_column(
+        self,
+        field: str,
+        model_type: type,
+        field_references: dict[str, _FieldReference],
+        join_models: set[type],
+    ) -> Any:
+        """Resolve a column attribute, handling relationship traversals.
+
+        If the field has a FieldReference with a relationship, the column is resolved
+        from the related model and the related model is added to join_models.
+        Otherwise, the column is resolved from the primary model_type.
+        """
+        ref = field_references.get(field)
+        if ref is not None and ref.relationship_name is not None and ref.related_model is not None:
+            join_models.add(ref.related_model)
+            return getattr(ref.related_model, ref.field_name)
+        return getattr(model_type, field)
 
     def _build_filter_conditions(
         self,
         model_type: Type[PySpringModelT],
         parsed_query: _Query,
         params: dict[str, Any],
-    ) -> list[ColumnElement[bool]]:
-        """Build individual filter conditions for each field."""
+    ) -> tuple[list[ColumnElement[bool]], set[type]]:
+        """Build individual filter conditions for each field.
+
+        Returns:
+            A tuple of (filter_conditions, join_models) where join_models is the set
+            of related model classes that need to be joined.
+        """
         filter_conditions = []
+        join_models: set[type] = set()
 
         for field in parsed_query.required_fields:
             # BETWEEN fields use min_/max_ prefixes - skip them here, handled below
             if field.startswith("min_") or field.startswith("max_"):
                 continue
-            column = getattr(model_type, field)
+            column = self._resolve_column(field, model_type, parsed_query.field_references, join_models)
             optional_param_value = params.get(field, None)
             if optional_param_value is None:
                 raise ValueError(f"Required field '{field}' is missing or None in keyword arguments. All required fields must be provided with non-None values, getting {params}")
@@ -224,7 +259,7 @@ class CrudRepositoryImplementationService:
         # Handle BETWEEN fields
         for field, operation in parsed_query.field_operations.items():
             if operation == FieldOperation.BETWEEN:
-                column = getattr(model_type, field)
+                column = self._resolve_column(field, model_type, parsed_query.field_references, join_models)
                 min_key = f"min_{field}"
                 max_key = f"max_{field}"
                 min_val = params.get(min_key)
@@ -235,14 +270,14 @@ class CrudRepositoryImplementationService:
 
         # Handle null check fields (IS_NULL, IS_NOT_NULL)
         for field in parsed_query.null_check_fields:
-            column = getattr(model_type, field)
+            column = self._resolve_column(field, model_type, parsed_query.field_references, join_models)
             operation = parsed_query.field_operations[field]
             if operation == FieldOperation.IS_NULL:
                 filter_conditions.append(column.is_(None))
             elif operation == FieldOperation.IS_NOT_NULL:
                 filter_conditions.append(column.isnot(None))
 
-        return filter_conditions
+        return filter_conditions, join_models
 
     def _create_field_condition(
         self,
@@ -354,27 +389,48 @@ class CrudRepositoryImplementationService:
         return result
 
     @Transactional
-    def _execute_count(self, model_type: Type[PySpringModelT], condition) -> int:
+    def _execute_count(self, model_type: Type[PySpringModelT], condition, join_models: set[type] | None = None) -> int:
         session = SessionContextHolder.get_or_create_session()
-        statement = select(func.count()).select_from(model_type)
-        if condition is not None:
-            statement = statement.where(condition)
+        if join_models:
+            # Use subquery for count with joins to avoid counting duplicates
+            pk_columns = [getattr(model_type, col) for col in PySpringModel.get_primary_key_columns(model_type)]
+            subq = select(*pk_columns).select_from(model_type)
+            for join_model in join_models:
+                subq = subq.join(join_model)
+            if condition is not None:
+                subq = subq.where(condition)
+            subq = subq.distinct().subquery()
+            statement = select(func.count()).select_from(subq)
+        else:
+            statement = select(func.count()).select_from(model_type)
+            if condition is not None:
+                statement = statement.where(condition)
         return session.exec(statement).one()
 
     @Transactional
-    def _execute_exists(self, model_type: Type[PySpringModelT], condition) -> bool:
-        session = SessionContextHolder.get_or_create_session()
-        statement = select(func.count()).select_from(model_type)
-        if condition is not None:
-            statement = statement.where(condition)
-        return session.exec(statement).one() > 0
+    def _execute_exists(self, model_type: Type[PySpringModelT], condition, join_models: set[type] | None = None) -> bool:
+        return self._execute_count(model_type, condition, join_models) > 0
 
     @Transactional
-    def _execute_delete(self, model_type: Type[PySpringModelT], condition) -> int:
+    def _execute_delete(self, model_type: Type[PySpringModelT], condition, join_models: set[type] | None = None) -> int:
         session = SessionContextHolder.get_or_create_session()
-        statement = delete(model_type)
-        if condition is not None:
-            statement = statement.where(condition)
+        if join_models:
+            # DELETE with join: find IDs first via subquery, then delete by ID
+            pk_columns = [getattr(model_type, col) for col in PySpringModel.get_primary_key_columns(model_type)]
+            subq = select(*pk_columns).select_from(model_type)
+            for join_model in join_models:
+                subq = subq.join(join_model)
+            if condition is not None:
+                subq = subq.where(condition)
+            subq = subq.distinct().subquery()
+            # Assume single primary key for simplicity
+            pk_col_name = PySpringModel.get_primary_key_columns(model_type)[0]
+            pk_col = getattr(model_type, pk_col_name)
+            statement = delete(model_type).where(pk_col.in_(select(subq)))
+        else:
+            statement = delete(model_type)
+            if condition is not None:
+                statement = statement.where(condition)
         result = session.execute(statement)
         return result.rowcount
 
