@@ -336,6 +336,11 @@ class TestGetRelationshipFields:
         result = get_relationship_fields(ParentModel)
         assert isinstance(result, dict)
 
+    def test_get_relationship_fields_still_returns_empty_for_non_model(self):
+        """Non-SQLModel class should return empty dict via NoInspectionAvailable, not generic Exception."""
+        result = get_relationship_fields(str)
+        assert result == {}
+
 
 class TestRelationshipParsing:
     """Tests for parse_query with model_type for relationship resolution."""

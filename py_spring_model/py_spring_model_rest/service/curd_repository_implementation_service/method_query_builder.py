@@ -3,6 +3,7 @@ from enum import Enum
 from typing import Any, Dict, Optional
 
 from pydantic import BaseModel
+from sqlalchemy.exc import NoInspectionAvailable
 
 
 class ConditionNotation(str, Enum):
@@ -79,7 +80,7 @@ def get_relationship_fields(model_type: type) -> dict[str, type]:
 
     try:
         mapper = sa_inspect(model_type)
-    except Exception:
+    except NoInspectionAvailable:
         return relationships
 
     for rel in mapper.relationships:
