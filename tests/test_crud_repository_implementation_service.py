@@ -1,11 +1,13 @@
 
 
+from typing import Optional
+
 from loguru import logger
 from pydantic import BaseModel
 import pytest
 from sqlalchemy import create_engine
 from sqlmodel import SQLModel
-from py_spring_model import PySpringModel, Field, CrudRepository, Query
+from py_spring_model import PySpringModel, Field, Relationship, CrudRepository, Query
 from py_spring_model.core.session_context_holder import SessionContextHolder
 from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.crud_repository_implementation_service import CrudRepositoryImplementationService
 from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.method_query_builder import _MetodQueryBuilder
@@ -303,3 +305,286 @@ class TestCountExistsDeleteExecution:
         remaining = repo.find_all()
         assert len(remaining) == 1
         assert remaining[0].name == "Bob"
+
+
+# ---- Relationship query test models ----
+
+class Author(PySpringModel, table=True):
+    __tablename__ = "rel_test_author"
+    id: int = Field(default=None, primary_key=True)
+    name: str = ""
+    books: list["Book"] = Relationship(back_populates="author")
+
+
+class Book(PySpringModel, table=True):
+    __tablename__ = "rel_test_book"
+    id: int = Field(default=None, primary_key=True)
+    title: str = ""
+    genre: str = ""
+    author_id: Optional[int] = Field(default=None, foreign_key="rel_test_author.id")
+    author: Optional[Author] = Relationship(back_populates="books")
+
+
+class AuthorRepository(CrudRepository[int, Author]):
+    def find_all_by_books_genre(self, genre: str) -> list[Author]: ...
+    def find_by_books_genre(self, genre: str) -> Author: ...
+    def find_all_by_books_title_contains(self, title: str) -> list[Author]: ...
+    def find_all_by_books_title_starts_with(self, title: str) -> list[Author]: ...
+    def find_all_by_books_title_ends_with(self, title: str) -> list[Author]: ...
+    def find_all_by_books_genre_in(self, genre: list[str]) -> list[Author]: ...
+    def find_all_by_books_genre_ne(self, genre: str) -> list[Author]: ...
+    def find_all_by_books_genre_and_name(self, genre: str, name: str) -> list[Author]: ...
+    def find_all_by_books_genre_or_name(self, genre: str, name: str) -> list[Author]: ...
+    def count_by_books_genre(self, genre: str) -> int: ...
+    def exists_by_books_genre(self, genre: str) -> bool: ...
+    def delete_all_by_books_genre(self, genre: str) -> int: ...
+
+
+class BookRepository(CrudRepository[int, Book]):
+    def find_all_by_author_name(self, name: str) -> list[Book]: ...
+    def find_all_by_author_name_and_genre(self, name: str, genre: str) -> list[Book]: ...
+
+
+class TestRelationshipQueryImplementation:
+    def setup_method(self):
+        self.engine = create_engine("sqlite:///:memory:", echo=False)
+        PySpringModel._engine = self.engine
+        SessionContextHolder.clear()
+        SQLModel.metadata.create_all(self.engine)
+
+    def teardown_method(self):
+        SQLModel.metadata.drop_all(self.engine)
+        SessionContextHolder.clear()
+
+    def _seed_data(self):
+        """Seed test data: Alice has 2 sci-fi books, Bob has 1 fantasy book."""
+        self.author_repo = AuthorRepository()
+        self.book_repo = BookRepository()
+        self.service = CrudRepositoryImplementationService()
+
+        alice = Author(name="Alice")
+        bob = Author(name="Bob")
+        self.author_repo.save(alice)
+        self.author_repo.save(bob)
+        self.alice_id = alice.id
+        self.bob_id = bob.id
+
+        session = SessionContextHolder.get_or_create_session()
+        session.add(Book(title="Sci-fi Book", genre="sci-fi", author_id=alice.id))
+        session.add(Book(title="Another Sci-fi", genre="sci-fi", author_id=alice.id))
+        session.add(Book(title="Fantasy Book", genre="fantasy", author_id=bob.id))
+        session.commit()
+
+        self.service._implemenmt_query(AuthorRepository)
+        self.service._implemenmt_query(BookRepository)
+
+    # --- Basic relationship SELECT ---
+
+    def test_relationship_query_returns_correct_results(self):
+        self._seed_data()
+        results = self.author_repo.find_all_by_books_genre(genre="sci-fi")
+        assert len(results) == 1
+        assert results[0].name == "Alice"
+
+    def test_find_all_deduplicates_with_multiple_matching_children(self):
+        """Alice has 2 sci-fi books; result should still be 1 author."""
+        self._seed_data()
+        results = self.author_repo.find_all_by_books_genre(genre="sci-fi")
+        assert len(results) == 1
+
+    def test_find_all_no_match_returns_empty(self):
+        self._seed_data()
+        results = self.author_repo.find_all_by_books_genre(genre="horror")
+        assert len(results) == 0
+
+    def test_find_all_returns_all_when_all_match(self):
+        """Both authors have books with some genre — verify both returned."""
+        self._seed_data()
+        # Add a sci-fi book for Bob too
+        session = SessionContextHolder.get_or_create_session()
+        session.add(Book(title="Bob Sci-fi", genre="sci-fi", author_id=self.bob_id))
+        session.commit()
+        results = self.author_repo.find_all_by_books_genre(genre="sci-fi")
+        assert len(results) == 2
+        names = sorted(r.name for r in results)
+        assert names == ["Alice", "Bob"]
+
+    def test_find_by_single_result_with_relationship(self):
+        self._seed_data()
+        result = self.author_repo.find_by_books_genre(genre="fantasy")
+        assert result is not None
+        assert result.name == "Bob"
+
+    # --- Operation suffixes on relationship fields ---
+
+    def test_contains_on_relationship_field(self):
+        self._seed_data()
+        results = self.author_repo.find_all_by_books_title_contains(title="Sci-fi")
+        assert len(results) == 1
+        assert results[0].name == "Alice"
+
+    def test_starts_with_on_relationship_field(self):
+        self._seed_data()
+        results = self.author_repo.find_all_by_books_title_starts_with(title="Fantasy")
+        assert len(results) == 1
+        assert results[0].name == "Bob"
+
+    def test_ends_with_on_relationship_field(self):
+        self._seed_data()
+        results = self.author_repo.find_all_by_books_title_ends_with(title="Book")
+        # "Sci-fi Book" and "Fantasy Book" end with "Book" -> both authors
+        assert len(results) == 2
+
+    def test_in_on_relationship_field(self):
+        self._seed_data()
+        results = self.author_repo.find_all_by_books_genre_in(genre=["sci-fi", "fantasy"])
+        assert len(results) == 2
+        names = sorted(r.name for r in results)
+        assert names == ["Alice", "Bob"]
+
+    def test_in_on_relationship_field_single_value(self):
+        self._seed_data()
+        results = self.author_repo.find_all_by_books_genre_in(genre=["fantasy"])
+        assert len(results) == 1
+        assert results[0].name == "Bob"
+
+    def test_ne_on_relationship_field(self):
+        self._seed_data()
+        results = self.author_repo.find_all_by_books_genre_ne(genre="sci-fi")
+        # Only Bob's fantasy book has genre != "sci-fi"
+        assert len(results) == 1
+        assert results[0].name == "Bob"
+
+    # --- Mixed: relationship + direct column ---
+
+    def test_mixed_relationship_and_direct_column_with_and(self):
+        self._seed_data()
+        results = self.author_repo.find_all_by_books_genre_and_name(genre="sci-fi", name="Alice")
+        assert len(results) == 1
+        assert results[0].name == "Alice"
+
+    def test_mixed_relationship_and_direct_column_no_match(self):
+        self._seed_data()
+        results = self.author_repo.find_all_by_books_genre_and_name(genre="sci-fi", name="Bob")
+        assert len(results) == 0
+
+    def test_mixed_relationship_and_direct_column_with_or(self):
+        self._seed_data()
+        results = self.author_repo.find_all_by_books_genre_or_name(genre="sci-fi", name="Bob")
+        # Alice matches genre, Bob matches name -> both
+        assert len(results) == 2
+
+    # --- Reverse direction: child filtered by parent ---
+
+    def test_reverse_direction_child_by_parent(self):
+        self._seed_data()
+        results = self.book_repo.find_all_by_author_name(name="Alice")
+        assert len(results) == 2
+        assert all(b.author_id == self.alice_id for b in results)
+
+    def test_reverse_direction_no_match(self):
+        self._seed_data()
+        results = self.book_repo.find_all_by_author_name(name="Nobody")
+        assert len(results) == 0
+
+    def test_reverse_mixed_relationship_and_direct(self):
+        self._seed_data()
+        results = self.book_repo.find_all_by_author_name_and_genre(name="Alice", genre="sci-fi")
+        assert len(results) == 2
+
+    def test_reverse_mixed_no_match(self):
+        self._seed_data()
+        results = self.book_repo.find_all_by_author_name_and_genre(name="Alice", genre="fantasy")
+        assert len(results) == 0
+
+    # --- COUNT with relationship ---
+
+    def test_count_with_relationship(self):
+        self._seed_data()
+        count = self.author_repo.count_by_books_genre(genre="sci-fi")
+        assert count == 1  # 1 distinct author, not 2 books
+
+    def test_count_with_relationship_no_match(self):
+        self._seed_data()
+        count = self.author_repo.count_by_books_genre(genre="horror")
+        assert count == 0
+
+    def test_count_deduplicates(self):
+        """Alice has 2 sci-fi books — count should still be 1."""
+        self._seed_data()
+        count = self.author_repo.count_by_books_genre(genre="sci-fi")
+        assert count == 1
+
+    # --- EXISTS with relationship ---
+
+    def test_exists_with_relationship_true(self):
+        self._seed_data()
+        assert self.author_repo.exists_by_books_genre(genre="sci-fi") is True
+
+    def test_exists_with_relationship_false(self):
+        self._seed_data()
+        assert self.author_repo.exists_by_books_genre(genre="horror") is False
+
+    # --- DELETE with relationship ---
+
+    def test_delete_with_relationship(self):
+        self._seed_data()
+        count = self.author_repo.delete_all_by_books_genre(genre="fantasy")
+        assert count == 1  # Bob deleted
+        remaining = self.author_repo.find_all()
+        assert len(remaining) == 1
+        assert remaining[0].name == "Alice"
+
+    def test_delete_with_relationship_no_match(self):
+        self._seed_data()
+        count = self.author_repo.delete_all_by_books_genre(genre="horror")
+        assert count == 0
+        assert len(self.author_repo.find_all()) == 2
+
+    def test_delete_with_relationship_deduplicates(self):
+        """Alice has 2 sci-fi books — delete should only delete her once."""
+        self._seed_data()
+        count = self.author_repo.delete_all_by_books_genre(genre="sci-fi")
+        assert count == 1
+        remaining = self.author_repo.find_all()
+        assert len(remaining) == 1
+        assert remaining[0].name == "Bob"
+
+
+class TestRelationshipSQLGeneration:
+    """Verify generated SQL contains JOIN and DISTINCT for relationship queries."""
+
+    def test_sql_contains_join_and_distinct(self):
+        service = CrudRepositoryImplementationService()
+        parsed_query = _MetodQueryBuilder("find_all_by_books_genre").parse_query(model_type=Author)
+        statement = service._get_sql_statement(Author, parsed_query, {"genre": "sci-fi"})
+        sql = str(statement).replace("\n", "")
+        assert "JOIN" in sql
+        assert "DISTINCT" in sql
+
+    def test_sql_no_join_for_direct_column(self):
+        service = CrudRepositoryImplementationService()
+        parsed_query = _MetodQueryBuilder("find_all_by_name").parse_query(model_type=Author)
+        statement = service._get_sql_statement(Author, parsed_query, {"name": "Alice"})
+        sql = str(statement).replace("\n", "")
+        assert "JOIN" not in sql
+        assert "DISTINCT" not in sql
+
+    def test_sql_mixed_has_join(self):
+        service = CrudRepositoryImplementationService()
+        parsed_query = _MetodQueryBuilder("find_all_by_books_genre_and_name").parse_query(model_type=Author)
+        statement = service._get_sql_statement(Author, parsed_query, {"genre": "sci-fi", "name": "Alice"})
+        sql = str(statement).replace("\n", "")
+        assert "JOIN" in sql
+        assert "DISTINCT" in sql
+        assert "rel_test_book" in sql
+        assert "rel_test_author" in sql
+
+    def test_sql_reverse_direction_has_join(self):
+        service = CrudRepositoryImplementationService()
+        parsed_query = _MetodQueryBuilder("find_all_by_author_name").parse_query(model_type=Book)
+        statement = service._get_sql_statement(Book, parsed_query, {"name": "Alice"})
+        sql = str(statement).replace("\n", "")
+        assert "JOIN" in sql
+        assert "DISTINCT" in sql
+        assert "rel_test_author" in sql
