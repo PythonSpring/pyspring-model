@@ -73,11 +73,11 @@ class TestPropagationE2E:
 
     def _count_users(self) -> int:
         with PySpringModel.create_managed_session() as s:
-            return s.execute(text("SELECT COUNT(*) FROM propagationtestuser")).scalar()
+            return s.execute(text("SELECT COUNT(*) FROM propagation_test_user")).scalar()
 
     def _get_user_names(self) -> list[str]:
         with PySpringModel.create_managed_session() as s:
-            rows = s.execute(text("SELECT name FROM propagationtestuser ORDER BY name")).fetchall()
+            rows = s.execute(text("SELECT name FROM propagation_test_user ORDER BY name")).fetchall()
             return [r.name for r in rows]
 
     # ── REQUIRED ─────────────────────────────────────────────────────────

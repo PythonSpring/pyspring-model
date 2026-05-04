@@ -64,7 +64,7 @@ class TestTransactionalDecorator:
         
         # Verify data persisted to database
         with PySpringModel.create_managed_session() as session:
-            users = session.execute(text("SELECT * FROM transactionaltestuser")).fetchall()
+            users = session.execute(text("SELECT * FROM transactional_test_user")).fetchall()
             assert len(users) == 1
             assert users[0].name == "John Doe"
 
@@ -88,7 +88,7 @@ class TestTransactionalDecorator:
         
         # Verify no data persisted to database
         with PySpringModel.create_managed_session() as session:
-            users = session.execute(text("SELECT * FROM transactionaltestuser")).fetchall()
+            users = session.execute(text("SELECT * FROM transactional_test_user")).fetchall()
             assert len(users) == 0
 
     def test_nested_transactional_success(self):
@@ -105,7 +105,7 @@ class TestTransactionalDecorator:
         @Transactional
         def update_user_age(user_id: int, new_age: int):
             session = SessionContextHolder.get_or_create_session()
-            session.execute(text(f"UPDATE transactionaltestuser SET age = {new_age} WHERE id = {user_id}"))
+            session.execute(text(f"UPDATE transactional_test_user SET age = {new_age} WHERE id = {user_id}"))
             
         @Transactional
         def create_and_update_user():
@@ -122,7 +122,7 @@ class TestTransactionalDecorator:
         
         # Verify both operations were committed
         with PySpringModel.create_managed_session() as session:
-            users = session.execute(text("SELECT * FROM transactionaltestuser")).fetchall()
+            users = session.execute(text("SELECT * FROM transactional_test_user")).fetchall()
             assert len(users) == 1
             assert users[0].name == "Alice Smith"
             assert users[0].age == 35  # Updated by nested function
@@ -141,7 +141,7 @@ class TestTransactionalDecorator:
         @Transactional
         def update_user_with_error(user_id: int):
             session = SessionContextHolder.get_or_create_session()
-            session.execute(text(f"UPDATE transactionaltestuser SET age = 40 WHERE id = {user_id}"))
+            session.execute(text(f"UPDATE transactional_test_user SET age = 40 WHERE id = {user_id}"))
             raise RuntimeError("Update failed")
         
         @Transactional
@@ -159,7 +159,7 @@ class TestTransactionalDecorator:
         
         # Verify no data persisted (everything rolled back)
         with PySpringModel.create_managed_session() as session:
-            users = session.execute(text("SELECT * FROM transactionaltestuser")).fetchall()
+            users = session.execute(text("SELECT * FROM transactional_test_user")).fetchall()
             assert len(users) == 0
 
     def test_nested_transactional_rollback_from_outer(self):
@@ -176,7 +176,7 @@ class TestTransactionalDecorator:
         @Transactional
         def update_user_age(user_id: int, new_age: int):
             session = SessionContextHolder.get_or_create_session()
-            session.execute(text(f"UPDATE transactionaltestuser SET age = {new_age} WHERE id = {user_id}"))
+            session.execute(text(f"UPDATE transactional_test_user SET age = {new_age} WHERE id = {user_id}"))
         
         @Transactional
         def create_update_and_fail():
@@ -194,7 +194,7 @@ class TestTransactionalDecorator:
         
         # Verify no data persisted (everything rolled back)
         with PySpringModel.create_managed_session() as session:
-            users = session.execute(text("SELECT * FROM transactionaltestuser")).fetchall()
+            users = session.execute(text("SELECT * FROM transactional_test_user")).fetchall()
             assert len(users) == 0
 
     def test_session_sharing_across_nested_transactions(self):
@@ -265,7 +265,7 @@ class TestTransactionalDecorator:
         
         # Verify both transactions committed separately
         with PySpringModel.create_managed_session() as session:
-            users = session.execute(text("SELECT * FROM transactionaltestuser ORDER BY id")).fetchall()
+            users = session.execute(text("SELECT * FROM transactional_test_user ORDER BY id")).fetchall()
             assert len(users) == 2
             assert users[0].name == "User 1"
             assert users[1].name == "User 2"
@@ -384,7 +384,7 @@ class TestTransactionalDecorator:
         assert result.name == "ParamReq"
 
         with PySpringModel.create_managed_session() as session:
-            users = session.execute(text("SELECT * FROM transactionaltestuser WHERE name='ParamReq'")).fetchall()
+            users = session.execute(text("SELECT * FROM transactional_test_user WHERE name='ParamReq'")).fetchall()
             assert len(users) == 1
 
     def test_parameterized_requires_new(self):
