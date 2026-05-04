@@ -144,49 +144,31 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
         return entity_list
 
     @Transactional
-    def delete(self, entity: T) -> bool:
+    def delete(self, entity: T) -> None:
         session = SessionContextHolder.get_or_create_session()
-        optional_instance = self._find_by_query(entity.model_dump())
-        if optional_instance is None:
-            return False
-        session.delete(optional_instance)
-        return True
-
-    @Transactional
-    def delete_all(self, entities: Iterable[T]) -> bool:
-        session = SessionContextHolder.get_or_create_session()
-        ids = [entity.id for entity in entities] # type: ignore
-        
-        statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
-        deleted_entities = self._find_all_by_statement(statement)
-        if deleted_entities is None:
-            return False
-        
-        for entity in deleted_entities:
+        if self.exists_by_id(entity.id):  # type: ignore
             session.delete(entity)
 
-        return True
-
+    @Transactional
+    def delete_all(self, entities: Iterable[T]) -> None:
+        session = SessionContextHolder.get_or_create_session()
+        for entity in entities:
+            if self.exists_by_id(entity.id):  # type: ignore
+                session.delete(entity)
 
     @Transactional
-    def delete_by_id(self, _id: ID) -> bool:
+    def delete_by_id(self, _id: ID) -> None:
         session = SessionContextHolder.get_or_create_session()
         entity = self._find_by_query({"id": _id})
-        if entity is None:
-            return False
-        session.delete(entity)
-        return True
+        if entity is not None:
+            session.delete(entity)
 
     @Transactional
-    def delete_all_by_ids(self, ids: list[ID]) -> bool:
+    def delete_all_by_ids(self, ids: list[ID]) -> None:
         session = SessionContextHolder.get_or_create_session()
         statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
-        deleted_entities = self._find_all_by_statement(statement)
-        if deleted_entities is None:
-            return False
-        for entity in deleted_entities:
+        for entity in self._find_all_by_statement(statement):
             session.delete(entity)
-        return True
 
     @Transactional
     def count(self) -> int:

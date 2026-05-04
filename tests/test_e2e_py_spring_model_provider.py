@@ -192,7 +192,7 @@ class TestPySpringModelStarterSQLite:
         assert updated.quantity == 20
 
         # Delete
-        assert repo.delete_by_id(item.id)
+        repo.delete_by_id(item.id)
         assert repo.find_by_id(item.id) is None
 
     def test_find_all(self):
@@ -454,7 +454,7 @@ class TestPySpringModelStarterPostgres:
         assert updated.quantity == 50
 
         # Delete
-        assert repo.delete_by_id(item.id)
+        repo.delete_by_id(item.id)
         assert repo.find_by_id(item.id) is None
 
     def test_find_all_postgres(self):

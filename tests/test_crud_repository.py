@@ -94,26 +94,26 @@ class TestCrudRepository:
         self.create_test_user(user_repository)
         user = user_repository.find_by_id(1)
         assert user is not None
-        assert user_repository.delete(user)
+        user_repository.delete(user)
         assert user_repository.find_by_id(1) is None
 
     def test_delete_by_id(self, user_repository: UserRepository):
         self.create_test_user(user_repository)
         user = user_repository.find_by_id(1)
         assert user is not None
-        assert user_repository.delete_by_id(1)
+        user_repository.delete_by_id(1)
         assert user_repository.find_by_id(1) is None
 
     def test_delete_all(self, user_repository: UserRepository):
         self.create_test_user(user_repository)
         users = user_repository.find_all()
         assert len(users) == 1
-        assert user_repository.delete_all(users)
+        user_repository.delete_all(users)
         assert len(user_repository.find_all()) == 0
 
     def test_delete_all_by_ids(self, user_repository: UserRepository):
         self.create_test_user(user_repository)
-        assert user_repository.delete_all_by_ids([1])
+        user_repository.delete_all_by_ids([1])
         assert user_repository.find_by_id(1) is None
     
     def test_upsert_for_existing_user(self, user_repository: UserRepository):
@@ -153,11 +153,12 @@ class TestCrudRepository:
         self.create_test_user(user_repository)
         user = user_repository.find_by_id(1)
         assert user is not None
-        assert user_repository.delete(user)
+        user_repository.delete(user)
         assert user_repository.find_by_id(1) is None
 
     def test_delete_user_with_user_not_found(self, user_repository: UserRepository):
-        assert user_repository.delete(User(id=1, name="John Doe", email="john@example.com")) is False
+        user_repository.delete(User(id=1, name="John Doe", email="john@example.com"))
+        assert user_repository.find_by_id(1) is None
 
     def test_count_empty(self, user_repository: UserRepository):
         assert user_repository.count() == 0
@@ -219,6 +220,28 @@ class TestCrudRepository:
         self.create_test_user(user_repository)
         result = user_repository.find_all()
         assert len(result) == 1
+
+    def test_delete_with_modified_entity_field(self, user_repository: UserRepository):
+        self.create_test_user(user_repository)
+        user = user_repository.find_by_id(1)
+        assert user is not None
+
+        user.name = "Modified Name"
+
+        user_repository.delete(user)
+        assert user_repository.find_by_id(1) is None
+
+    def test_delete_all_with_modified_entity_fields(self, user_repository: UserRepository):
+        user_repository.save(User(name="Alice", email="alice@example.com"))
+        user_repository.save(User(name="Bob", email="bob@example.com"))
+
+        users = user_repository.find_all()
+        assert len(users) == 2
+
+        users[0].name = "Modified"
+
+        user_repository.delete_all(users)
+        assert len(user_repository.find_all()) == 0
 
     def test_save_all_returns_list(self, user_repository: UserRepository):
         users = [
