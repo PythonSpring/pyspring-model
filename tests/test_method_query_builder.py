@@ -1,6 +1,16 @@
+from typing import Optional
+
 import pytest
 
-from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.method_query_builder import _MetodQueryBuilder, _Query, FieldOperation, QueryType
+from py_spring_model import PySpringModel, Field, Relationship
+from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.method_query_builder import (
+    _MetodQueryBuilder,
+    _Query,
+    _FieldReference,
+    FieldOperation,
+    QueryType,
+    get_relationship_fields,
+)
 
 
 class TestMetodQueryBuilder:
@@ -286,3 +296,97 @@ class TestMetodQueryBuilder:
         assert "min_age" in query.required_fields
         assert "max_age" in query.required_fields
         assert "age" not in query.required_fields
+
+    def test_query_has_field_references_default(self):
+        builder = _MetodQueryBuilder("find_by_name")
+        query = builder.parse_query()
+        assert query.field_references == {}
+
+
+# ---- Test models for relationship introspection ----
+
+class ParentModel(PySpringModel, table=True):
+    __tablename__ = "rel_parent"
+    id: int = Field(default=None, primary_key=True)
+    name: str = ""
+    children: list["ChildModel"] = Relationship(back_populates="parent")
+
+
+class ChildModel(PySpringModel, table=True):
+    __tablename__ = "rel_child"
+    id: int = Field(default=None, primary_key=True)
+    status: str = ""
+    value: int = 0
+    parent_id: Optional[int] = Field(default=None, foreign_key="rel_parent.id")
+    parent: Optional[ParentModel] = Relationship(back_populates="children")
+
+
+class TestGetRelationshipFields:
+    def test_returns_relationship_names_for_parent(self):
+        result = get_relationship_fields(ParentModel)
+        assert "children" in result
+        assert result["children"] is ChildModel
+
+    def test_returns_relationship_names_for_child(self):
+        result = get_relationship_fields(ChildModel)
+        assert "parent" in result
+        assert result["parent"] is ParentModel
+
+    def test_returns_dict(self):
+        result = get_relationship_fields(ParentModel)
+        assert isinstance(result, dict)
+
+
+class TestRelationshipParsing:
+    """Tests for parse_query with model_type for relationship resolution."""
+
+    def test_simple_relationship_field(self):
+        builder = _MetodQueryBuilder("find_all_by_children_status")
+        query = builder.parse_query(model_type=ParentModel)
+        assert "status" in query.field_references
+        ref = query.field_references["status"]
+        assert ref.field_name == "status"
+        assert ref.relationship_name == "children"
+        assert ref.related_model is ChildModel
+        assert "status" in query.required_fields
+
+    def test_relationship_field_with_operation_suffix(self):
+        builder = _MetodQueryBuilder("find_all_by_children_value_gte")
+        query = builder.parse_query(model_type=ParentModel)
+        assert "value" in query.field_references
+        ref = query.field_references["value"]
+        assert ref.field_name == "value"
+        assert ref.relationship_name == "children"
+        assert ref.related_model is ChildModel
+        assert query.field_operations["value"] == FieldOperation.GREATER_EQUAL
+
+    def test_mixed_direct_and_relationship_fields(self):
+        builder = _MetodQueryBuilder("find_all_by_children_status_and_name")
+        query = builder.parse_query(model_type=ParentModel)
+        assert "status" in query.field_references
+        assert query.field_references["status"].relationship_name == "children"
+        assert "name" not in query.field_references
+        assert "status" in query.required_fields
+        assert "name" in query.required_fields
+
+    def test_reverse_direction_relationship(self):
+        builder = _MetodQueryBuilder("find_all_by_parent_name")
+        query = builder.parse_query(model_type=ChildModel)
+        assert "name" in query.field_references
+        ref = query.field_references["name"]
+        assert ref.relationship_name == "parent"
+        assert ref.related_model is ParentModel
+
+    def test_no_model_type_skips_relationship_resolution(self):
+        """When model_type is not provided, parse_query behaves as before."""
+        builder = _MetodQueryBuilder("find_all_by_children_status")
+        query = builder.parse_query()  # no model_type
+        assert query.field_references == {}
+        assert "children_status" in query.required_fields
+
+    def test_direct_column_preferred_over_relationship(self):
+        """If a token matches a direct column exactly, it should NOT be treated as a relationship traversal."""
+        builder = _MetodQueryBuilder("find_by_name")
+        query = builder.parse_query(model_type=ParentModel)
+        assert query.field_references == {}
+        assert "name" in query.required_fields
