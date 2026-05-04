@@ -19,6 +19,7 @@ Features
 -   Context-Based Session Management: Thread-safe session handling via `SessionContextHolder` using Python `contextvars`, with automatic session cleanup per HTTP request through middleware.
 -   Dynamic Query Generation: PySpringModel can dynamically generate and execute SQL queries based on method names in your repositories.
 -   Field Operations Support: PySpringModel supports various field operations like IN, NOT IN, greater than, less than, LIKE, and more.
+-   Relationship Query Support: PySpringModel can auto-generate JOIN queries by introspecting SQLModel `Relationship` fields, enabling queries like `find_all_by_books_genre` that filter a parent model by attributes of its related children.
 -   Custom SQL Queries: PySpringModel supports custom SQL queries using the `@Query` decorator for complex database operations, including support for modifying queries (INSERT, UPDATE, DELETE).
 -   RESTful API Integration: PySpringModel integrates with the PySpring framework to automatically generate basic table CRUD APIs for your SQLModel entities.
 
@@ -282,6 +283,101 @@ target_users = user_repo.find_by_age_gt_and_status_in(
     status=["active", "pending"]
 )
 ```
+
+### Relationship Queries (Auto-Generated JOINs)
+
+PySpringModel can auto-generate JOIN queries by introspecting SQLModel `Relationship` fields. When a method name contains a relationship field name followed by a target column, the query builder generates the appropriate JOIN and applies DISTINCT to avoid duplicate results.
+
+#### Setup
+
+Define models with `Relationship` and `back_populates`:
+
+```py
+from py_spring_model import PySpringModel, Field, Relationship
+from typing import Optional, List
+
+class Author(PySpringModel, table=True):
+    id: int = Field(default=None, primary_key=True)
+    name: str = ""
+    books: list["Book"] = Relationship(back_populates="author")
+
+class Book(PySpringModel, table=True):
+    id: int = Field(default=None, primary_key=True)
+    title: str = ""
+    genre: str = ""
+    author_id: Optional[int] = Field(default=None, foreign_key="author.id")
+    author: Optional[Author] = Relationship(back_populates="books")
+```
+
+#### Querying Parent by Child Attributes
+
+Use the pattern `{relationship_name}_{target_field}` in method names:
+
+```py
+class AuthorRepository(CrudRepository[int, Author]):
+    # Find authors who have books with genre "sci-fi"
+    # SQL: SELECT DISTINCT author.* FROM author JOIN book ON ... WHERE book.genre = :genre
+    def find_all_by_books_genre(self, genre: str) -> List[Author]: ...
+
+    # All field operations work on relationship fields
+    def find_all_by_books_title_contains(self, title: str) -> List[Author]: ...
+    def find_all_by_books_genre_in(self, genre: List[str]) -> List[Author]: ...
+    def find_all_by_books_genre_ne(self, genre: str) -> List[Author]: ...
+```
+
+#### Querying Child by Parent Attributes (Reverse Direction)
+
+```py
+class BookRepository(CrudRepository[int, Book]):
+    # Find books whose author has name "Alice"
+    # SQL: SELECT DISTINCT book.* FROM book JOIN author ON ... WHERE author.name = :name
+    def find_all_by_author_name(self, name: str) -> List[Book]: ...
+```
+
+#### Mixed: Relationship + Direct Column
+
+Combine relationship fields with direct columns using `_and_` or `_or_`:
+
+```py
+class AuthorRepository(CrudRepository[int, Author]):
+    # Authors who have sci-fi books AND whose name is "Alice"
+    def find_all_by_books_genre_and_name(self, genre: str, name: str) -> List[Author]: ...
+
+    # Authors who have sci-fi books OR whose name is "Bob"
+    def find_all_by_books_genre_or_name(self, genre: str, name: str) -> List[Author]: ...
+```
+
+#### All Query Types Supported
+
+COUNT, EXISTS, and DELETE work with relationship fields:
+
+```py
+class AuthorRepository(CrudRepository[int, Author]):
+    # Count distinct authors who have sci-fi books
+    def count_by_books_genre(self, genre: str) -> int: ...
+
+    # Check if any author has sci-fi books
+    def exists_by_books_genre(self, genre: str) -> bool: ...
+
+    # Delete authors who have fantasy books
+    def delete_all_by_books_genre(self, genre: str) -> int: ...
+```
+
+#### Resolution Rules
+
+The parser uses smart introspection to resolve ambiguity between direct columns and relationship traversals:
+
+1. Collect all `Relationship` field names from the model
+2. Sort by length descending (longest match first) to avoid partial prefix collisions
+3. For each field token, check if it starts with `{relationship_name}_`
+4. If matched, the remainder is the target column on the related model
+5. If no relationship matches, treat the token as a direct column (existing behavior)
+
+#### Limitations
+
+- **Single-hop only**: `books_genre` works, but multi-hop like `books_publisher_name` is not supported
+- **No aggregation**: Queries like "find authors where count of books > 5" are not supported
+- **No custom join conditions**: Joins are derived from the model's `Relationship` / `foreign_key` definitions
 
 ### Custom SQL Queries
 
