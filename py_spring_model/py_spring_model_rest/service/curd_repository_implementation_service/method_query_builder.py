@@ -188,45 +188,32 @@ class _MetodQueryBuilder:
             if field in ("_and_", "_or_"):
                 continue
 
-            # Strip operation suffix first to get base token
+            # Strip operation suffix to get base token
             operation = self._detect_field_operation(field)
             base_token = self._extract_base_field(field, operation) if operation else field
 
-            # Try to resolve as relationship traversal
+            # Resolve the field name: relationship traversal or direct column
             rel_name, target_field = self._resolve_relationship_token(base_token, rel_fields)
-
             if rel_name is not None and target_field is not None:
-                # This is a relationship traversal
-                field_references[target_field] = _FieldReference(
-                    field_name=target_field,
+                resolved_field = target_field
+                field_references[resolved_field] = _FieldReference(
+                    field_name=resolved_field,
                     relationship_name=rel_name,
                     related_model=rel_fields[rel_name],
                 )
-                if operation:
-                    field_operations[target_field] = operation
-                    if operation == FieldOperation.BETWEEN:
-                        required_fields.append(f"min_{target_field}")
-                        required_fields.append(f"max_{target_field}")
-                    elif operation in (FieldOperation.IS_NULL, FieldOperation.IS_NOT_NULL):
-                        null_check_fields.append(target_field)
-                    else:
-                        required_fields.append(target_field)
-                else:
-                    required_fields.append(target_field)
             else:
-                # Existing behavior: direct column
-                if not operation:
-                    required_fields.append(field)
-                    continue
-                base_field = self._extract_base_field(field, operation)
-                field_operations[base_field] = operation
-                if operation == FieldOperation.BETWEEN:
-                    required_fields.append(f"min_{base_field}")
-                    required_fields.append(f"max_{base_field}")
-                elif operation in (FieldOperation.IS_NULL, FieldOperation.IS_NOT_NULL):
-                    null_check_fields.append(base_field)
-                else:
-                    required_fields.append(base_field)
+                resolved_field = base_token
+
+            # Record operation and classify the field
+            if operation:
+                field_operations[resolved_field] = operation
+
+            if operation == FieldOperation.BETWEEN:
+                required_fields.extend([f"min_{resolved_field}", f"max_{resolved_field}"])
+            elif operation in (FieldOperation.IS_NULL, FieldOperation.IS_NOT_NULL):
+                null_check_fields.append(resolved_field)
+            else:
+                required_fields.append(resolved_field)
 
         return _Query(
             raw_query_list=raw_query_list,
