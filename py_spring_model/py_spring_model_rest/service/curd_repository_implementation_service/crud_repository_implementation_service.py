@@ -12,7 +12,7 @@ from typing import (
 from loguru import logger
 from py_spring_core import Component
 from pydantic import BaseModel
-from sqlalchemy import ColumnElement, delete, func
+from sqlalchemy import ColumnElement, delete, func, inspect as sa_inspect
 from sqlalchemy.sql import and_, or_
 from sqlmodel import select
 from sqlmodel.sql.expression import SelectOfScalar
@@ -388,12 +388,19 @@ class CrudRepositoryImplementationService:
         )
         return result
 
+    @staticmethod
+    def _get_pk_column_names(model_type: type) -> list[str]:
+        """Get primary key column names using SQLAlchemy's mapper inspection."""
+        mapper = sa_inspect(model_type)
+        return [col.key for col in mapper.primary_key]
+
     @Transactional
     def _execute_count(self, model_type: Type[PySpringModelT], condition, join_models: set[type] | None = None) -> int:
         session = SessionContextHolder.get_or_create_session()
         if join_models:
             # Use subquery for count with joins to avoid counting duplicates
-            pk_columns = [getattr(model_type, col) for col in PySpringModel.get_primary_key_columns(model_type)]
+            pk_col_names = self._get_pk_column_names(model_type)
+            pk_columns = [getattr(model_type, col) for col in pk_col_names]
             subq = select(*pk_columns).select_from(model_type)
             for join_model in join_models:
                 subq = subq.join(join_model)
@@ -416,7 +423,8 @@ class CrudRepositoryImplementationService:
         session = SessionContextHolder.get_or_create_session()
         if join_models:
             # DELETE with join: find IDs first via subquery, then delete by ID
-            pk_columns = [getattr(model_type, col) for col in PySpringModel.get_primary_key_columns(model_type)]
+            pk_col_names = self._get_pk_column_names(model_type)
+            pk_columns = [getattr(model_type, col) for col in pk_col_names]
             subq = select(*pk_columns).select_from(model_type)
             for join_model in join_models:
                 subq = subq.join(join_model)
@@ -424,8 +432,7 @@ class CrudRepositoryImplementationService:
                 subq = subq.where(condition)
             subq = subq.distinct().subquery()
             # Assume single primary key for simplicity
-            pk_col_name = PySpringModel.get_primary_key_columns(model_type)[0]
-            pk_col = getattr(model_type, pk_col_name)
+            pk_col = getattr(model_type, pk_col_names[0])
             statement = delete(model_type).where(pk_col.in_(select(subq)))
         else:
             statement = delete(model_type)
