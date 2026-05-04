@@ -10,6 +10,7 @@ from py_spring_model.py_spring_model_rest.service.curd_repository_implementation
     FieldOperation,
     QueryType,
     get_relationship_fields,
+    _get_column_names,
 )
 
 
@@ -336,6 +337,22 @@ class TestGetRelationshipFields:
         result = get_relationship_fields(ParentModel)
         assert isinstance(result, dict)
 
+    def test_get_relationship_fields_still_returns_empty_for_non_model(self):
+        """Non-SQLModel class should return empty dict via NoInspectionAvailable, not generic Exception."""
+        result = get_relationship_fields(str)
+        assert result == {}
+
+
+class TestGetColumnNames:
+    def test_returns_column_names_for_model(self):
+        result = _get_column_names(ParentModel)
+        assert "id" in result
+        assert "name" in result
+
+    def test_returns_empty_set_for_non_model(self):
+        result = _get_column_names(str)
+        assert result == set()
+
 
 class TestRelationshipParsing:
     """Tests for parse_query with model_type for relationship resolution."""
@@ -480,13 +497,10 @@ class TestRelationshipEdgeCases:
         assert query.field_operations["value"] == FieldOperation.GREATER_EQUAL
 
     def test_relationship_name_with_no_target_field_treated_as_direct_column(self):
-        """If token equals relationship name exactly (no remaining field), treat as direct column."""
+        """If token equals relationship name exactly (no remaining field), validation catches it."""
         builder = _MetodQueryBuilder("find_all_by_children")
-        # "children" has no _ suffix, so _resolve_relationship_token won't match
-        # (it requires {rel_name}_ prefix with something after)
-        query = builder.parse_query(model_type=ParentModel)
-        assert query.field_references == {}
-        assert "children" in query.required_fields
+        with pytest.raises(ValueError, match=r"field 'children' does not exist on model 'ParentModel'"):
+            builder.parse_query(model_type=ParentModel)
 
     def test_get_relationship_fields_on_non_model_class(self):
         """Non-SQLModel class should return empty dict, not crash."""
@@ -497,3 +511,67 @@ class TestRelationshipEdgeCases:
 def test_field_reference_importable():
     from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.method_query_builder import _FieldReference
     assert _FieldReference is not None
+
+
+class TestFieldValidation:
+    """Tests that parse_query validates field names against model columns at startup."""
+
+    def test_invalid_direct_field_raises_error(self):
+        """A typo like 'naem' should raise ValueError with helpful message."""
+        builder = _MetodQueryBuilder("find_by_naem")
+        with pytest.raises(ValueError, match=r"field 'naem' does not exist on model 'ParentModel'"):
+            builder.parse_query(model_type=ParentModel)
+
+    def test_invalid_direct_field_lists_available_columns(self):
+        """Error message should include available columns for easy correction."""
+        builder = _MetodQueryBuilder("find_by_naem")
+        with pytest.raises(ValueError, match=r"Available columns:"):
+            builder.parse_query(model_type=ParentModel)
+
+    def test_valid_direct_field_passes(self):
+        """Valid field 'name' on ParentModel should not raise."""
+        builder = _MetodQueryBuilder("find_by_name")
+        query = builder.parse_query(model_type=ParentModel)
+        assert "name" in query.required_fields
+
+    def test_invalid_field_with_operation_suffix(self):
+        """'find_by_naem_gt' — 'naem' is invalid even with an operation suffix."""
+        builder = _MetodQueryBuilder("find_by_naem_gt")
+        with pytest.raises(ValueError, match=r"field 'naem' does not exist on model 'ParentModel'"):
+            builder.parse_query(model_type=ParentModel)
+
+    def test_no_validation_without_model_type(self):
+        """When model_type is None, no validation occurs (backwards compatible)."""
+        builder = _MetodQueryBuilder("find_by_nonexistent")
+        query = builder.parse_query()  # no model_type
+        assert "nonexistent" in query.required_fields
+
+    def test_relationship_name_as_field_raises_error(self):
+        """'find_all_by_children' — 'children' is a relationship name, not a column."""
+        builder = _MetodQueryBuilder("find_all_by_children")
+        with pytest.raises(ValueError, match=r"field 'children' does not exist on model 'ParentModel'"):
+            builder.parse_query(model_type=ParentModel)
+
+    def test_invalid_relationship_field_raises_error(self):
+        """'find_all_by_children_nonexistent' — 'nonexistent' is not a column on ChildModel."""
+        builder = _MetodQueryBuilder("find_all_by_children_nonexistent")
+        with pytest.raises(ValueError, match=r"field 'nonexistent' does not exist on related model 'ChildModel'"):
+            builder.parse_query(model_type=ParentModel)
+
+    def test_invalid_relationship_field_mentions_relationship_name(self):
+        """Error should mention the relationship name for context."""
+        builder = _MetodQueryBuilder("find_all_by_children_nonexistent")
+        with pytest.raises(ValueError, match=r"via relationship 'children'"):
+            builder.parse_query(model_type=ParentModel)
+
+    def test_valid_relationship_field_passes(self):
+        """Valid relationship field 'children_status' should not raise."""
+        builder = _MetodQueryBuilder("find_all_by_children_status")
+        query = builder.parse_query(model_type=ParentModel)
+        assert "status" in query.field_references
+
+    def test_invalid_relationship_field_with_operation(self):
+        """'find_all_by_children_nonexistent_gt' should raise for invalid target field."""
+        builder = _MetodQueryBuilder("find_all_by_children_nonexistent_gt")
+        with pytest.raises(ValueError, match=r"field 'nonexistent' does not exist on related model 'ChildModel'"):
+            builder.parse_query(model_type=ParentModel)

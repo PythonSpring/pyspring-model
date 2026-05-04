@@ -3,6 +3,7 @@ from enum import Enum
 from typing import Any, Dict, Optional
 
 from pydantic import BaseModel
+from sqlalchemy.exc import NoInspectionAvailable
 
 
 class ConditionNotation(str, Enum):
@@ -79,7 +80,7 @@ def get_relationship_fields(model_type: type) -> dict[str, type]:
 
     try:
         mapper = sa_inspect(model_type)
-    except Exception:
+    except NoInspectionAvailable:
         return relationships
 
     for rel in mapper.relationships:
@@ -95,7 +96,7 @@ def _get_column_names(model_type: type) -> set[str]:
 
     try:
         mapper = sa_inspect(model_type)
-    except Exception:
+    except NoInspectionAvailable:
         return set()
     return {col.key for col in mapper.columns}
 
@@ -229,6 +230,16 @@ class _MetodQueryBuilder:
             else:
                 required_fields.append(resolved_field)
 
+        if model_type is not None and direct_columns:
+            self._validate_fields(
+                model_type,
+                direct_columns,
+                required_fields,
+                null_check_fields,
+                field_operations,
+                field_references,
+            )
+
         return _Query(
             raw_query_list=raw_query_list,
             is_one_result=is_one,
@@ -281,3 +292,65 @@ class _MetodQueryBuilder:
     def _extract_base_field(self, field: str, operation: FieldOperation) -> str:
         suffix = self._OPERATION_TO_SUFFIX[operation]
         return field[: -len(suffix)]
+
+    def _validate_fields(
+        self,
+        model_type: type,
+        direct_columns: set[str],
+        required_fields: list[str],
+        null_check_fields: list[str],
+        field_operations: Dict[str, FieldOperation],
+        field_references: Dict[str, _FieldReference],
+    ) -> None:
+        for field in required_fields:
+            if field.startswith("min_") or field.startswith("max_"):
+                base = field[4:]
+                if base in field_references:
+                    ref = field_references[base]
+                    if ref.related_model is not None:
+                        related_columns = _get_column_names(ref.related_model)
+                        if related_columns and base not in related_columns:
+                            raise ValueError(
+                                f"Method '{self.method_name}': field '{base}' does not exist on related model "
+                                f"'{ref.related_model.__name__}' (via relationship '{ref.relationship_name}'). "
+                                f"Available columns: {sorted(related_columns)}"
+                            )
+                elif base not in direct_columns:
+                    raise ValueError(
+                        f"Method '{self.method_name}': field '{base}' does not exist on model "
+                        f"'{model_type.__name__}'. Available columns: {sorted(direct_columns)}"
+                    )
+                continue
+
+            if field in field_references:
+                ref = field_references[field]
+                if ref.related_model is not None:
+                    related_columns = _get_column_names(ref.related_model)
+                    if related_columns and field not in related_columns:
+                        raise ValueError(
+                            f"Method '{self.method_name}': field '{field}' does not exist on related model "
+                            f"'{ref.related_model.__name__}' (via relationship '{ref.relationship_name}'). "
+                            f"Available columns: {sorted(related_columns)}"
+                        )
+            elif field not in direct_columns:
+                raise ValueError(
+                    f"Method '{self.method_name}': field '{field}' does not exist on model "
+                    f"'{model_type.__name__}'. Available columns: {sorted(direct_columns)}"
+                )
+
+        for field in null_check_fields:
+            if field in field_references:
+                ref = field_references[field]
+                if ref.related_model is not None:
+                    related_columns = _get_column_names(ref.related_model)
+                    if related_columns and field not in related_columns:
+                        raise ValueError(
+                            f"Method '{self.method_name}': field '{field}' does not exist on related model "
+                            f"'{ref.related_model.__name__}' (via relationship '{ref.relationship_name}'). "
+                            f"Available columns: {sorted(related_columns)}"
+                        )
+            elif field not in direct_columns:
+                raise ValueError(
+                    f"Method '{self.method_name}': field '{field}' does not exist on model "
+                    f"'{model_type.__name__}'. Available columns: {sorted(direct_columns)}"
+                )
