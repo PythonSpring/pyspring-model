@@ -230,6 +230,16 @@ class _MetodQueryBuilder:
             else:
                 required_fields.append(resolved_field)
 
+        if model_type is not None and direct_columns:
+            self._validate_fields(
+                model_type,
+                direct_columns,
+                required_fields,
+                null_check_fields,
+                field_operations,
+                field_references,
+            )
+
         return _Query(
             raw_query_list=raw_query_list,
             is_one_result=is_one,
@@ -282,3 +292,34 @@ class _MetodQueryBuilder:
     def _extract_base_field(self, field: str, operation: FieldOperation) -> str:
         suffix = self._OPERATION_TO_SUFFIX[operation]
         return field[: -len(suffix)]
+
+    def _validate_fields(
+        self,
+        model_type: type,
+        direct_columns: set[str],
+        required_fields: list[str],
+        null_check_fields: list[str],
+        field_operations: Dict[str, FieldOperation],
+        field_references: Dict[str, _FieldReference],
+    ) -> None:
+        for field in required_fields:
+            if field.startswith("min_") or field.startswith("max_"):
+                base = field[4:]
+                if base not in field_references and base not in direct_columns:
+                    raise ValueError(
+                        f"Method '{self.method_name}': field '{base}' does not exist on model "
+                        f"'{model_type.__name__}'. Available columns: {sorted(direct_columns)}"
+                    )
+                continue
+            if field not in field_references and field not in direct_columns:
+                raise ValueError(
+                    f"Method '{self.method_name}': field '{field}' does not exist on model "
+                    f"'{model_type.__name__}'. Available columns: {sorted(direct_columns)}"
+                )
+
+        for field in null_check_fields:
+            if field not in field_references and field not in direct_columns:
+                raise ValueError(
+                    f"Method '{self.method_name}': field '{field}' does not exist on model "
+                    f"'{model_type.__name__}'. Available columns: {sorted(direct_columns)}"
+                )

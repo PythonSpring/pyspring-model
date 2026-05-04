@@ -497,13 +497,10 @@ class TestRelationshipEdgeCases:
         assert query.field_operations["value"] == FieldOperation.GREATER_EQUAL
 
     def test_relationship_name_with_no_target_field_treated_as_direct_column(self):
-        """If token equals relationship name exactly (no remaining field), treat as direct column."""
+        """If token equals relationship name exactly (no remaining field), validation catches it."""
         builder = _MetodQueryBuilder("find_all_by_children")
-        # "children" has no _ suffix, so _resolve_relationship_token won't match
-        # (it requires {rel_name}_ prefix with something after)
-        query = builder.parse_query(model_type=ParentModel)
-        assert query.field_references == {}
-        assert "children" in query.required_fields
+        with pytest.raises(ValueError, match=r"field 'children' does not exist on model 'ParentModel'"):
+            builder.parse_query(model_type=ParentModel)
 
     def test_get_relationship_fields_on_non_model_class(self):
         """Non-SQLModel class should return empty dict, not crash."""
@@ -514,3 +511,43 @@ class TestRelationshipEdgeCases:
 def test_field_reference_importable():
     from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.method_query_builder import _FieldReference
     assert _FieldReference is not None
+
+
+class TestFieldValidation:
+    """Tests that parse_query validates field names against model columns at startup."""
+
+    def test_invalid_direct_field_raises_error(self):
+        """A typo like 'naem' should raise ValueError with helpful message."""
+        builder = _MetodQueryBuilder("find_by_naem")
+        with pytest.raises(ValueError, match=r"field 'naem' does not exist on model 'ParentModel'"):
+            builder.parse_query(model_type=ParentModel)
+
+    def test_invalid_direct_field_lists_available_columns(self):
+        """Error message should include available columns for easy correction."""
+        builder = _MetodQueryBuilder("find_by_naem")
+        with pytest.raises(ValueError, match=r"Available columns:"):
+            builder.parse_query(model_type=ParentModel)
+
+    def test_valid_direct_field_passes(self):
+        """Valid field 'name' on ParentModel should not raise."""
+        builder = _MetodQueryBuilder("find_by_name")
+        query = builder.parse_query(model_type=ParentModel)
+        assert "name" in query.required_fields
+
+    def test_invalid_field_with_operation_suffix(self):
+        """'find_by_naem_gt' — 'naem' is invalid even with an operation suffix."""
+        builder = _MetodQueryBuilder("find_by_naem_gt")
+        with pytest.raises(ValueError, match=r"field 'naem' does not exist on model 'ParentModel'"):
+            builder.parse_query(model_type=ParentModel)
+
+    def test_no_validation_without_model_type(self):
+        """When model_type is None, no validation occurs (backwards compatible)."""
+        builder = _MetodQueryBuilder("find_by_nonexistent")
+        query = builder.parse_query()  # no model_type
+        assert "nonexistent" in query.required_fields
+
+    def test_relationship_name_as_field_raises_error(self):
+        """'find_all_by_children' — 'children' is a relationship name, not a column."""
+        builder = _MetodQueryBuilder("find_all_by_children")
+        with pytest.raises(ValueError, match=r"field 'children' does not exist on model 'ParentModel'"):
+            builder.parse_query(model_type=ParentModel)
