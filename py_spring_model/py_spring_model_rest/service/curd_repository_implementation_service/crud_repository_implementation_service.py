@@ -269,13 +269,14 @@ class CrudRepositoryImplementationService:
                 filter_conditions.append(column.between(min_val, max_val))
 
         # Handle null check fields (IS_NULL, IS_NOT_NULL)
+        _null_check_builder = {
+            FieldOperation.IS_NULL: lambda col: col.is_(None),
+            FieldOperation.IS_NOT_NULL: lambda col: col.isnot(None),
+        }
         for field in parsed_query.null_check_fields:
             column = self._resolve_column(field, model_type, parsed_query.field_references, join_models)
             operation = parsed_query.field_operations[field]
-            if operation == FieldOperation.IS_NULL:
-                filter_conditions.append(column.is_(None))
-            elif operation == FieldOperation.IS_NOT_NULL:
-                filter_conditions.append(column.isnot(None))
+            filter_conditions.append(_null_check_builder[operation](column))
 
         return filter_conditions, join_models
 
@@ -394,19 +395,22 @@ class CrudRepositoryImplementationService:
         mapper = sa_inspect(model_type)
         return [col.key for col in mapper.primary_key]
 
+    def _build_distinct_pk_subquery(self, model_type: type, condition: Any, join_models: set[type]):
+        """Build a DISTINCT subquery selecting primary keys with joins applied."""
+        pk_col_names = self._get_pk_column_names(model_type)
+        pk_columns = [getattr(model_type, col) for col in pk_col_names]
+        subq = select(*pk_columns).select_from(model_type)
+        for join_model in join_models:
+            subq = subq.join(join_model)
+        if condition is not None:
+            subq = subq.where(condition)
+        return subq.distinct().subquery(), pk_col_names
+
     @Transactional
     def _execute_count(self, model_type: Type[PySpringModelT], condition, join_models: set[type] | None = None) -> int:
         session = SessionContextHolder.get_or_create_session()
         if join_models:
-            # Use subquery for count with joins to avoid counting duplicates
-            pk_col_names = self._get_pk_column_names(model_type)
-            pk_columns = [getattr(model_type, col) for col in pk_col_names]
-            subq = select(*pk_columns).select_from(model_type)
-            for join_model in join_models:
-                subq = subq.join(join_model)
-            if condition is not None:
-                subq = subq.where(condition)
-            subq = subq.distinct().subquery()
+            subq, _ = self._build_distinct_pk_subquery(model_type, condition, join_models)
             statement = select(func.count()).select_from(subq)
         else:
             statement = select(func.count()).select_from(model_type)
@@ -422,16 +426,7 @@ class CrudRepositoryImplementationService:
     def _execute_delete(self, model_type: Type[PySpringModelT], condition, join_models: set[type] | None = None) -> int:
         session = SessionContextHolder.get_or_create_session()
         if join_models:
-            # DELETE with join: find IDs first via subquery, then delete by ID
-            pk_col_names = self._get_pk_column_names(model_type)
-            pk_columns = [getattr(model_type, col) for col in pk_col_names]
-            subq = select(*pk_columns).select_from(model_type)
-            for join_model in join_models:
-                subq = subq.join(join_model)
-            if condition is not None:
-                subq = subq.where(condition)
-            subq = subq.distinct().subquery()
-            # Assume single primary key for simplicity
+            subq, pk_col_names = self._build_distinct_pk_subquery(model_type, condition, join_models)
             pk_col = getattr(model_type, pk_col_names[0])
             statement = delete(model_type).where(pk_col.in_(select(subq)))
         else:
