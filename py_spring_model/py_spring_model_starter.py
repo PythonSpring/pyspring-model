@@ -11,6 +11,7 @@ from py_spring_model.core.model import PySpringModel
 from py_spring_model.py_spring_model_rest.controller.session_controller import SessionController
 from py_spring_model.repository.repository_base import RepositoryBase
 from py_spring_model.py_spring_model_rest import PySpringModelRestService
+from py_spring_model.py_spring_model_rest.controller.py_spring_model_rest_controller import PySpringModelRestController
 from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.crud_repository_implementation_service import (
     CrudRepositoryImplementationService,
 )
@@ -27,6 +28,7 @@ class PySpringModelStarter(PySpringStarter):
 
     def on_configure(self) -> None:
         self.rest_controller_classes.append(SessionController)
+        self.rest_controller_classes.append(PySpringModelRestController)
         self.component_classes.append(PySpringModelRestService)
         self.properties_classes.append(PySpringModelProperties)
 

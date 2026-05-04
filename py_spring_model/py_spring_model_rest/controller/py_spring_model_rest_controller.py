@@ -1,9 +1,11 @@
 from typing import Any, Type, Union
+from venv import logger
 
 from fastapi import Response, status
 from py_spring_core import RestController
 from pydantic import BaseModel
 
+from py_spring_model.core.commons import PySpringModelProperties
 from py_spring_model.core.model import PySpringModel
 from py_spring_model.py_spring_model_rest.service.py_spring_model_rest_service import (
     PySpringModelRestService,
@@ -16,9 +18,12 @@ class PySpringModelRestController(RestController):
     """
 
     rest_service: PySpringModelRestService
+    properties: PySpringModelProperties
 
     def post_construct(self) -> None:
-        self._register_resource_for_models()
+        if self.properties.create_crud_routes:
+            logger.info("[CRUD ROUTE REGISTRATION] Registering CRUD routes for all models.")
+            self._register_resource_for_models()
 
     def _register_resource_for_models(self) -> None:
         all_models = self.rest_service.get_all_models()
@@ -28,6 +33,8 @@ class PySpringModelRestController(RestController):
     def _register_basic_crud_routes(
         self, resource_name: str, model: Type[PySpringModel]
     ) -> None:
+        assert self.router is not None, "Router must be initialized before registering routes."
+
         @self.router.get(
             f"/{resource_name}/count",
             summary=f"Count {resource_name}",
