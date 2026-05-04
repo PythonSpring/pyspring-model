@@ -390,3 +390,8 @@ class TestRelationshipParsing:
         query = builder.parse_query(model_type=ParentModel)
         assert query.field_references == {}
         assert "name" in query.required_fields
+
+
+def test_field_reference_importable():
+    from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.method_query_builder import _FieldReference
+    assert _FieldReference is not None
