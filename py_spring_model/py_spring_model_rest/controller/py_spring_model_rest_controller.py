@@ -1,5 +1,5 @@
 from typing import Any, Type, Union
-from venv import logger
+from loguru import logger
 
 from fastapi import Response, status
 from py_spring_core import RestController
