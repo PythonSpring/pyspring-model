@@ -63,6 +63,107 @@ class TestParseId:
         assert result == "abc-123"
 
 
+class TestCreateRequestModel:
+    """Tests for _create_request_model() dynamic Pydantic model generation."""
+
+    def test_request_model_has_same_fields_as_source_model(self):
+        request_model = PySpringModelRestController._create_request_model(RCHandlerUser)
+        assert set(request_model.model_fields.keys()) == set(RCHandlerUser.model_fields.keys())
+
+    def test_request_model_preserves_required_fields(self):
+        request_model = PySpringModelRestController._create_request_model(RCHandlerUser)
+        assert request_model.model_fields["name"].is_required()
+        assert request_model.model_fields["email"].is_required()
+
+    def test_request_model_preserves_optional_fields(self):
+        request_model = PySpringModelRestController._create_request_model(RCHandlerUser)
+        assert not request_model.model_fields["id"].is_required()
+
+    def test_request_model_validates_missing_required_fields(self):
+        request_model = PySpringModelRestController._create_request_model(RCHandlerUser)
+        with pytest.raises(Exception):
+            request_model.model_validate({"bad_field": 123})
+
+    def test_request_model_accepts_valid_data(self):
+        request_model = PySpringModelRestController._create_request_model(RCHandlerUser)
+        instance = request_model.model_validate({"name": "Alice", "email": "a@e.com"})
+        assert instance.name == "Alice"
+        assert instance.email == "a@e.com"
+
+    def test_request_model_name_includes_source_model_name(self):
+        request_model = PySpringModelRestController._create_request_model(RCHandlerUser)
+        assert "RCHandlerUser" in request_model.__name__
+
+
+class TestOpenAPISchemaGeneration:
+    """Tests that OpenAPI schema contains proper field definitions instead of generic additionalProperties."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        PySpringModel.set_engine(engine)
+        PySpringModel.set_metadata(SQLModel.metadata)
+        PySpringModel.set_models([RCHandlerUser])
+        RCHandlerUser.metadata.create_all(engine)
+
+        controller = PySpringModelRestController.__new__(PySpringModelRestController)
+        controller.rest_service = PySpringModelRestService()
+        controller.router = APIRouter()
+        controller.properties = PySpringModelProperties(
+            sqlalchemy_database_uri="sqlite:///:memory:",
+            create_crud_routes=True,
+        )
+        controller._register_basic_crud_routes("rc_handler_user", RCHandlerUser)
+
+        app = FastAPI()
+        app.include_router(controller.router)
+        self.client = TestClient(app)
+        self.openapi_schema = self.client.get("/openapi.json").json()
+        yield
+        RCHandlerUser.metadata.drop_all(engine)
+        PySpringModel._engine = None
+        PySpringModel._metadata = None
+
+    def _get_request_body_schema(self, path: str, method: str) -> dict:
+        ref = (
+            self.openapi_schema["paths"][path][method]["requestBody"]["content"][
+                "application/json"
+            ]["schema"]["$ref"]
+        )
+        schema_name = ref.split("/")[-1]
+        return self.openapi_schema["components"]["schemas"][schema_name]
+
+    def test_post_schema_has_model_fields(self):
+        schema = self._get_request_body_schema("/rc_handler_user", "post")
+        assert "name" in schema["properties"]
+        assert "email" in schema["properties"]
+        assert "id" in schema["properties"]
+
+    def test_post_schema_has_correct_types(self):
+        schema = self._get_request_body_schema("/rc_handler_user", "post")
+        assert schema["properties"]["name"]["type"] == "string"
+        assert schema["properties"]["email"]["type"] == "string"
+        assert schema["properties"]["id"]["type"] == "integer"
+
+    def test_post_schema_has_required_fields(self):
+        schema = self._get_request_body_schema("/rc_handler_user", "post")
+        assert "name" in schema["required"]
+        assert "email" in schema["required"]
+
+    def test_post_schema_does_not_have_additional_properties(self):
+        schema = self._get_request_body_schema("/rc_handler_user", "post")
+        assert "additionalProperties" not in schema
+
+    def test_put_schema_has_model_fields(self):
+        schema = self._get_request_body_schema("/rc_handler_user/{id}", "put")
+        assert "name" in schema["properties"]
+        assert "email" in schema["properties"]
+
+
 class TestRestControllerRouteHandlers:
     """Tests that invoke route handlers through FastAPI TestClient."""
 
@@ -110,9 +211,9 @@ class TestRestControllerRouteHandlers:
         data = response.json()
         assert data["name"] == "Alice"
 
-    def test_post_create_invalid_data_returns_400(self):
+    def test_post_create_invalid_data_returns_422(self):
         response = self.client.post("/rc_handler_user", json={"invalid_field": "value"})
-        assert response.status_code == 400
+        assert response.status_code == 422
 
     def test_get_by_id(self):
         user = self._create_user()
@@ -162,10 +263,10 @@ class TestRestControllerRouteHandlers:
         assert response.status_code == 200
         assert response.json()["name"] == "Alice Updated"
 
-    def test_put_update_invalid_data_returns_400(self):
+    def test_put_update_invalid_data_returns_422(self):
         user = self._create_user()
         response = self.client.put(f"/rc_handler_user/{user['id']}", json={"bad_field": 123})
-        assert response.status_code == 400
+        assert response.status_code == 422
 
     def test_delete_by_id(self):
         user = self._create_user()
