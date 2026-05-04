@@ -96,7 +96,7 @@ def _get_column_names(model_type: type) -> set[str]:
 
     try:
         mapper = sa_inspect(model_type)
-    except Exception:
+    except NoInspectionAvailable:
         return set()
     return {col.key for col in mapper.columns}
 

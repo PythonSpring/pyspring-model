@@ -10,6 +10,7 @@ from py_spring_model.py_spring_model_rest.service.curd_repository_implementation
     FieldOperation,
     QueryType,
     get_relationship_fields,
+    _get_column_names,
 )
 
 
@@ -340,6 +341,17 @@ class TestGetRelationshipFields:
         """Non-SQLModel class should return empty dict via NoInspectionAvailable, not generic Exception."""
         result = get_relationship_fields(str)
         assert result == {}
+
+
+class TestGetColumnNames:
+    def test_returns_column_names_for_model(self):
+        result = _get_column_names(ParentModel)
+        assert "id" in result
+        assert "name" in result
+
+    def test_returns_empty_set_for_non_model(self):
+        result = _get_column_names(str)
+        assert result == set()
 
 
 class TestRelationshipParsing:
