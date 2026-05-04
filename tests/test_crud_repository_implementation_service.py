@@ -131,8 +131,8 @@ class TestQuery:
     def test_in_operator_empty_list(self, implementation_service: CrudRepositoryImplementationService):
         parsed_query = _MetodQueryBuilder("find_by_status_in").parse_query()
         statement = implementation_service._get_sql_statement(User, parsed_query, {"status": []})
-        # Empty list should result in a condition that's always false
-        assert "IS NULL" in str(statement) or "= NULL" in str(statement)
+        sql = str(statement).lower()
+        assert "false" in sql or "1 != 1" in sql or "0 = 1" in sql
 
     def test_in_operator_invalid_type(self, implementation_service: CrudRepositoryImplementationService):
         parsed_query = _MetodQueryBuilder("find_by_status_in").parse_query()
@@ -175,6 +175,21 @@ class TestQuery:
         # Empty list should return no results
         results = user_repository.find_all_by_status_in(status=[])
         assert len(results) == 0
+
+    def test_null_list_param_raises_type_error(self, user_repository: UserRepository, implementation_service: CrudRepositoryImplementationService):
+        implementation_service._implemenmt_query(user_repository.__class__)
+        with pytest.raises(TypeError, match="Parameter 'status' expects .*, got None"):
+            user_repository.find_all_by_status_in(status=None)
+
+    def test_null_set_param_raises_type_error(self, implementation_service: CrudRepositoryImplementationService):
+        with pytest.raises(TypeError, match="Parameter 'ids' expects .*, got None"):
+            CrudRepositoryImplementationService._validate_collection_not_none("ids", None, set[int])
+
+    def test_null_scalar_param_passes_validation(self, implementation_service: CrudRepositoryImplementationService):
+        CrudRepositoryImplementationService._validate_collection_not_none("name", None, str)
+
+    def test_non_null_collection_passes_validation(self, implementation_service: CrudRepositoryImplementationService):
+        CrudRepositoryImplementationService._validate_collection_not_none("status", ["active"], list[str])
 
     def test_parameter_field_mapping_simple(self, implementation_service: CrudRepositoryImplementationService):
         """Test that parameter field mapping works with exact name matching and plural support"""

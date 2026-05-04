@@ -6,14 +6,15 @@ from typing import (
     Type,
     TypeVar,
     Union,
-    ParamSpec
+    ParamSpec,
+    get_origin,
 )
 
 from loguru import logger
 from py_spring_core import Component
 from pydantic import BaseModel
 from sqlalchemy import ColumnElement, delete, func, inspect as sa_inspect
-from sqlalchemy.sql import and_, or_
+from sqlalchemy.sql import and_, or_, false as sa_false, true as sa_true
 from sqlmodel import select
 from sqlmodel.sql.expression import SelectOfScalar
 
@@ -148,6 +149,16 @@ class CrudRepositoryImplementationService:
 
         return mapping
 
+    @staticmethod
+    def _validate_collection_not_none(param_name: str, value: Any, annotation: Any) -> None:
+        if value is not None:
+            return
+        origin = get_origin(annotation)
+        if origin in (list, set) or annotation in (list, set):
+            raise TypeError(
+                f"Parameter '{param_name}' expects {annotation}, got None"
+            )
+
     def _cast_plural_to_singular(self, word: str) -> str:
         if word.endswith('ies'):
             return word[:-3] + 'y'
@@ -162,6 +173,8 @@ class CrudRepositoryImplementationService:
             for param_name, value in kwargs.items():
                 if param_name in param_to_field_mapping:
                     field_name = param_to_field_mapping[param_name]
+                    if param_name in original_func_annotations:
+                        self._validate_collection_not_none(param_name, value, original_func_annotations[param_name])
                     field_kwargs[field_name] = value
                 else:
                     raise ValueError(f"Unknown parameter '{param_name}'. Expected parameters: {list(param_to_field_mapping.keys())}")
@@ -329,7 +342,7 @@ class CrudRepositoryImplementationService:
             )
 
         if len(param_value) == 0:
-            return column == None
+            return sa_false()
 
         return column.in_(param_value)
 
@@ -341,7 +354,7 @@ class CrudRepositoryImplementationService:
             )
 
         if len(param_value) == 0:
-            return column != None
+            return sa_true()
 
         return ~column.in_(param_value)
 
