@@ -146,10 +146,12 @@ class TestPySpringModelStarterSQLite:
         from py_spring_model.core.commons import PySpringModelProperties
         from py_spring_model.py_spring_model_rest import PySpringModelRestService
         from py_spring_model.py_spring_model_rest.controller.session_controller import SessionController
+        from py_spring_model.py_spring_model_rest.controller.py_spring_model_rest_controller import PySpringModelRestController
 
         assert PySpringModelProperties in starter.properties_classes
         assert PySpringModelRestService in starter.component_classes
         assert SessionController in starter.rest_controller_classes
+        assert PySpringModelRestController in starter.rest_controller_classes
 
     def test_on_initialized_creates_engine(self):
         """After on_initialized, the starter should have a live SQLAlchemy engine."""
