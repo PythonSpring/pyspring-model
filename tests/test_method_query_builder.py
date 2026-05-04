@@ -551,3 +551,27 @@ class TestFieldValidation:
         builder = _MetodQueryBuilder("find_all_by_children")
         with pytest.raises(ValueError, match=r"field 'children' does not exist on model 'ParentModel'"):
             builder.parse_query(model_type=ParentModel)
+
+    def test_invalid_relationship_field_raises_error(self):
+        """'find_all_by_children_nonexistent' — 'nonexistent' is not a column on ChildModel."""
+        builder = _MetodQueryBuilder("find_all_by_children_nonexistent")
+        with pytest.raises(ValueError, match=r"field 'nonexistent' does not exist on related model 'ChildModel'"):
+            builder.parse_query(model_type=ParentModel)
+
+    def test_invalid_relationship_field_mentions_relationship_name(self):
+        """Error should mention the relationship name for context."""
+        builder = _MetodQueryBuilder("find_all_by_children_nonexistent")
+        with pytest.raises(ValueError, match=r"via relationship 'children'"):
+            builder.parse_query(model_type=ParentModel)
+
+    def test_valid_relationship_field_passes(self):
+        """Valid relationship field 'children_status' should not raise."""
+        builder = _MetodQueryBuilder("find_all_by_children_status")
+        query = builder.parse_query(model_type=ParentModel)
+        assert "status" in query.field_references
+
+    def test_invalid_relationship_field_with_operation(self):
+        """'find_all_by_children_nonexistent_gt' should raise for invalid target field."""
+        builder = _MetodQueryBuilder("find_all_by_children_nonexistent_gt")
+        with pytest.raises(ValueError, match=r"field 'nonexistent' does not exist on related model 'ChildModel'"):
+            builder.parse_query(model_type=ParentModel)
