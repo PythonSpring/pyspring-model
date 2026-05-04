@@ -74,6 +74,8 @@ class CrudRepositoryImplementationService:
 
     def _implemenmt_query(self, repository_type: Type[CrudRepository]) -> None:
         methods = self._get_additional_methods(repository_type)
+        _, model_type = repository_type._get_model_id_type_with_class()
+
         for method in methods:
             func_name = f"{repository_type.__name__}.{method}"
             if func_name in self.skip_functions:
@@ -83,10 +85,9 @@ class CrudRepositoryImplementationService:
                 continue
 
             query_builder = _MetodQueryBuilder(method)
-            query = query_builder.parse_query()
+            query = query_builder.parse_query(model_type=model_type)
             logger.debug(f"Method: {method} has query: {query}")
 
-            _, model_type = repository_type._get_model_id_type_with_class()
             current_func = getattr(repository_type, method)
 
             copy_annotations: dict[str, Any] = copy.deepcopy(

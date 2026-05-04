@@ -1,11 +1,13 @@
 
 
+from typing import Optional
+
 from loguru import logger
 from pydantic import BaseModel
 import pytest
 from sqlalchemy import create_engine
 from sqlmodel import SQLModel
-from py_spring_model import PySpringModel, Field, CrudRepository, Query
+from py_spring_model import PySpringModel, Field, Relationship, CrudRepository, Query
 from py_spring_model.core.session_context_holder import SessionContextHolder
 from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.crud_repository_implementation_service import CrudRepositoryImplementationService
 from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.method_query_builder import _MetodQueryBuilder
@@ -303,3 +305,63 @@ class TestCountExistsDeleteExecution:
         remaining = repo.find_all()
         assert len(remaining) == 1
         assert remaining[0].name == "Bob"
+
+
+# ---- Relationship query test models ----
+
+class Author(PySpringModel, table=True):
+    __tablename__ = "rel_test_author"
+    id: int = Field(default=None, primary_key=True)
+    name: str = ""
+    books: list["Book"] = Relationship(back_populates="author")
+
+
+class Book(PySpringModel, table=True):
+    __tablename__ = "rel_test_book"
+    id: int = Field(default=None, primary_key=True)
+    title: str = ""
+    genre: str = ""
+    author_id: Optional[int] = Field(default=None, foreign_key="rel_test_author.id")
+    author: Optional[Author] = Relationship(back_populates="books")
+
+
+class AuthorRepository(CrudRepository[int, Author]):
+    def find_all_by_books_genre(self, genre: str) -> list[Author]: ...
+
+
+class TestRelationshipQueryImplementation:
+    def setup_method(self):
+        self.engine = create_engine("sqlite:///:memory:", echo=False)
+        PySpringModel._engine = self.engine
+        SessionContextHolder.clear()
+        SQLModel.metadata.create_all(self.engine)
+
+    def teardown_method(self):
+        SQLModel.metadata.drop_all(self.engine)
+        SessionContextHolder.clear()
+
+    def test_relationship_query_returns_correct_results(self):
+        repo = AuthorRepository()
+        service = CrudRepositoryImplementationService()
+
+        # Seed data
+        author1 = Author(name="Alice")
+        author2 = Author(name="Bob")
+        repo.save(author1)
+        repo.save(author2)
+
+        book1 = Book(title="Sci-fi Book", genre="sci-fi", author_id=author1.id)
+        book2 = Book(title="Fantasy Book", genre="fantasy", author_id=author2.id)
+        book3 = Book(title="Another Sci-fi", genre="sci-fi", author_id=author1.id)
+
+        book_session = SessionContextHolder.get_or_create_session()
+        book_session.add(book1)
+        book_session.add(book2)
+        book_session.add(book3)
+        book_session.commit()
+
+        service._implemenmt_query(AuthorRepository)
+        results = repo.find_all_by_books_genre(genre="sci-fi")
+
+        assert len(results) == 1  # Only Alice, deduplicated
+        assert results[0].name == "Alice"
