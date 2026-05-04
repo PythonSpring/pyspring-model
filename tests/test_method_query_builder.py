@@ -575,3 +575,16 @@ class TestFieldValidation:
         builder = _MetodQueryBuilder("find_all_by_children_nonexistent_gt")
         with pytest.raises(ValueError, match=r"field 'nonexistent' does not exist on related model 'ChildModel'"):
             builder.parse_query(model_type=ParentModel)
+
+    def test_plural_method_name_resolves_to_singular_column(self):
+        """'find_all_by_names_in' should resolve 'names' to column 'name'."""
+        builder = _MetodQueryBuilder("find_all_by_names_in")
+        query = builder.parse_query(model_type=ParentModel)
+        assert "name" in query.required_fields
+        assert "names" not in query.required_fields
+
+    def test_plural_method_name_without_matching_singular_still_fails(self):
+        """'find_all_by_nonexistents_in' should still fail if singular also doesn't exist."""
+        builder = _MetodQueryBuilder("find_all_by_nonexistents_in")
+        with pytest.raises(ValueError, match=r"field 'nonexistents' does not exist on model 'ParentModel'"):
+            builder.parse_query(model_type=ParentModel)

@@ -217,7 +217,7 @@ class _MetodQueryBuilder:
                     related_model=rel_fields[rel_name],
                 )
             else:
-                resolved_field = base_token
+                resolved_field = self._resolve_plural_field(base_token, direct_columns)
 
             # Record operation and classify the field
             if operation:
@@ -292,6 +292,23 @@ class _MetodQueryBuilder:
     def _extract_base_field(self, field: str, operation: FieldOperation) -> str:
         suffix = self._OPERATION_TO_SUFFIX[operation]
         return field[: -len(suffix)]
+
+    @staticmethod
+    def _resolve_plural_field(token: str, direct_columns: set[str]) -> str:
+        """Resolve a field token to its column name, trying singular form if plural doesn't match."""
+        if token in direct_columns or not direct_columns:
+            return token
+        if token.endswith("ies"):
+            singular = token[:-3] + "y"
+        elif token.endswith("ses"):
+            singular = token[:-2]
+        elif token.endswith("s") and len(token) > 1:
+            singular = token[:-1]
+        else:
+            return token
+        if singular in direct_columns:
+            return singular
+        return token
 
     def _validate_fields(
         self,
