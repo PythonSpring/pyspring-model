@@ -3,7 +3,7 @@ from loguru import logger
 
 from fastapi import Response, status
 from py_spring_core import RestController
-from pydantic import BaseModel
+from pydantic import BaseModel, create_model
 
 from py_spring_model.core.commons import PySpringModelProperties
 from py_spring_model.core.model import PySpringModel
@@ -30,10 +30,18 @@ class PySpringModelRestController(RestController):
         for resource_name, model in all_models.items():
             self._register_basic_crud_routes(resource_name, model)
 
+    @staticmethod
+    def _create_request_model(model: Type[PySpringModel]) -> Type[BaseModel]:
+        fields = {}
+        for name, field_info in model.model_fields.items():
+            fields[name] = (field_info.annotation, field_info)
+        return create_model(f"{model.__name__}Input", **fields)
+
     def _register_basic_crud_routes(
         self, resource_name: str, model: Type[PySpringModel]
     ) -> None:
         assert self.router is not None, "Router must be initialized before registering routes."
+        request_model = self._create_request_model(model)
 
         @self.router.get(
             f"/{resource_name}/count",
@@ -82,10 +90,9 @@ class PySpringModelRestController(RestController):
             description=f"Create a new {resource_name} with the provided data.",
             tags=[resource_name],
         )
-        def post(model_data: dict[str, Any]):
-            model_type = self.rest_service.get_all_models()[resource_name]
+        def post(model_data: request_model):  # type: ignore[valid-type]
             try:
-                current_model = model_type.model_validate(model_data)
+                current_model = model.model_validate(model_data.model_dump(exclude_unset=True))
                 return self.rest_service.create(current_model)
             except Exception as error:
                 return Response(
@@ -98,9 +105,8 @@ class PySpringModelRestController(RestController):
             description=f"Create multiple {resource_name} at once.",
             tags=[resource_name],
         )
-        def batch_create(models: list[dict[str, Any]]):
-            model_type = self.rest_service.get_all_models()[resource_name]
-            validated = [model_type.model_validate(m) for m in models]
+        def batch_create(models: list[request_model]):  # type: ignore[valid-type]
+            validated = [model.model_validate(m.model_dump(exclude_unset=True)) for m in models]
             return self.rest_service.batch_create(validated)
 
         @self.router.put(
@@ -109,11 +115,10 @@ class PySpringModelRestController(RestController):
             description=f"Update an existing {resource_name} by its unique identifier.",
             tags=[resource_name],
         )
-        def put(id: Union[int, str], model_data: dict[str, Any]):
-            model_type = self.rest_service.get_all_models()[resource_name]
+        def put(id: Union[int, str], model_data: request_model):  # type: ignore[valid-type]
             parsed_id = self._parse_id(id, model)
             try:
-                current_model = model_type.model_validate(model_data)
+                current_model = model.model_validate(model_data.model_dump(exclude_unset=True))
                 return self.rest_service.update(parsed_id, current_model)
             except Exception as error:
                 return Response(
