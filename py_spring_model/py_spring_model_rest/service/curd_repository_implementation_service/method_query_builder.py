@@ -89,6 +89,17 @@ def get_relationship_fields(model_type: type) -> dict[str, type]:
     return relationships
 
 
+def _get_column_names(model_type: type) -> set[str]:
+    """Return the set of direct column attribute names for a SQLModel class."""
+    from sqlalchemy import inspect as sa_inspect
+
+    try:
+        mapper = sa_inspect(model_type)
+    except Exception:
+        return set()
+    return {col.key for col in mapper.columns}
+
+
 class _MetodQueryBuilder:
     """
     Parses a method name and extracts fields, conditions, and query type for dynamic query generation.
@@ -174,10 +185,12 @@ class _MetodQueryBuilder:
         raw_query = match.group(1)
         raw_query_list = re.split(r"(_and_|_or_)", raw_query)
 
-        # Resolve relationships if model_type is provided
+        # Resolve relationships and direct columns if model_type is provided
         rel_fields: dict[str, type] = {}
+        direct_columns: set[str] = set()
         if model_type is not None:
             rel_fields = get_relationship_fields(model_type)
+            direct_columns = _get_column_names(model_type)
 
         required_fields: list[str] = []
         field_operations: Dict[str, FieldOperation] = {}
@@ -192,9 +205,10 @@ class _MetodQueryBuilder:
             operation = self._detect_field_operation(field)
             base_token = self._extract_base_field(field, operation) if operation else field
 
-            # Resolve the field name: relationship traversal or direct column
+            # Resolve the field name: relationship traversal or direct column.
+            # Direct columns take precedence over relationship traversals for backwards compatibility.
             rel_name, target_field = self._resolve_relationship_token(base_token, rel_fields)
-            if rel_name is not None and target_field is not None:
+            if rel_name is not None and target_field is not None and base_token not in direct_columns:
                 resolved_field = target_field
                 field_references[resolved_field] = _FieldReference(
                     field_name=resolved_field,
