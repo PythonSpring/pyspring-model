@@ -67,7 +67,7 @@ class TestPySpringModel:
     def test_set_models_and_get_model_lookup(self):
         PySpringModel.set_models([SampleModel])
         model_lookup = PySpringModel.get_model_lookup()
-        assert model_lookup["samplemodel"] == SampleModel
+        assert model_lookup["sample_model"] == SampleModel
 
     def test_get_primary_key_columns(self):
         PySpringModel.set_metadata(SQLModel.metadata)

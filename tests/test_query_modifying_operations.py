@@ -25,58 +25,58 @@ class TestUser(PySpringModel, table=True):
 class TestUserRepository(CrudRepository[int, TestUser]):
     """Test repository with Query decorators for modifying operations"""
     
-    @Query("INSERT INTO testuser (name, email, age, salary, status, category) VALUES (:name, :email, :age, 0.0, 'active', 'general') RETURNING *", is_modifying=True)
+    @Query("INSERT INTO test_user (name, email, age, salary, status, category) VALUES (:name, :email, :age, 0.0, 'active', 'general') RETURNING *", is_modifying=True)
     def insert_user_with_commit(self, name: str, email: str, age: int) -> TestUser:
         """INSERT operation that should commit changes"""
         ...
 
 
-    @Query("INSERT INTO testuser (name, email, age, salary, status, category) VALUES (:name, :email, :age, 0.0, 'active', 'general')", is_modifying=False)
+    @Query("INSERT INTO test_user (name, email, age, salary, status, category) VALUES (:name, :email, :age, 0.0, 'active', 'general')", is_modifying=False)
     def insert_user_without_commit(self, name: str, email: str, age: int) -> TestUser:
         """INSERT operation that should NOT commit changes"""
         ...
 
-    @Query("UPDATE testuser SET name = :name, age = :age WHERE email = :email RETURNING *", is_modifying=True)
+    @Query("UPDATE test_user SET name = :name, age = :age WHERE email = :email RETURNING *", is_modifying=True)
     def update_user_with_commit(self, name: str, email: str, age: int) -> TestUser:
         """UPDATE operation that should commit changes"""
         ...
 
-    @Query("UPDATE testuser SET name = :name, age = :age WHERE email = :email", is_modifying=False)
+    @Query("UPDATE test_user SET name = :name, age = :age WHERE email = :email", is_modifying=False)
     def update_user_without_commit(self, name: str, email: str, age: int) -> None:
         """UPDATE operation that should NOT commit changes"""
         ...
 
-    @Query("SELECT * FROM testuser WHERE email = :email")
+    @Query("SELECT * FROM test_user WHERE email = :email")
     def find_by_email(self, email: str) -> Optional[TestUser]:
         """SELECT operation for verification (readonly, no commit needed)"""
         ...
 
-    @Query("SELECT * FROM testuser")
+    @Query("SELECT * FROM test_user")
     def find_all_users(self) -> List[TestUser]:
         """SELECT operation to get all users"""
         ...
 
-    @Query("DELETE FROM testuser WHERE email = :email", is_modifying=True)
+    @Query("DELETE FROM test_user WHERE email = :email", is_modifying=True)
     def delete_user_with_commit(self, email: str) -> None:
         """DELETE operation that should commit changes"""
         ...
 
-    @Query("DELETE FROM testuser WHERE email = :email", is_modifying=False)
+    @Query("DELETE FROM test_user WHERE email = :email", is_modifying=False)
     def delete_user_without_commit(self, email: str) -> None:
         """DELETE operation that should NOT commit changes"""
         ...
 
-    @Query("UPDATE testuser SET age = age + :increment WHERE age > :min_age", is_modifying=True)
+    @Query("UPDATE test_user SET age = age + :increment WHERE age > :min_age", is_modifying=True)
     def bulk_update_ages_with_commit(self, increment: int, min_age: int) -> None:
         """Bulk UPDATE operation that should commit changes"""
         ...
 
-    @Query("SELECT * FROM testuser WHERE age > :min_age ORDER BY age DESC")
+    @Query("SELECT * FROM test_user WHERE age > :min_age ORDER BY age DESC")
     def find_users_by_min_age(self, min_age: int) -> List[TestUser]:
         """SELECT with parameters (readonly)"""
         ...
 
-    @Query("SELECT COUNT(*) as count FROM testuser WHERE age BETWEEN :min_age AND :max_age")
+    @Query("SELECT COUNT(*) as count FROM test_user WHERE age BETWEEN :min_age AND :max_age")
     def count_users_by_age_range(self, min_age: int, max_age: int) -> int:
         """Aggregate query (readonly)"""
         ...
@@ -241,7 +241,7 @@ class TestQueryModifyingOperations:
             # Execute query with is_modifying=True
             try:
                 QueryExecutionService.execute_query(
-                    query_template="INSERT INTO testuser (name, email, age) VALUES (:name, :email, :age)",
+                    query_template="INSERT INTO test_user (name, email, age) VALUES (:name, :email, :age)",
                     func=dummy_insert_func,
                     kwargs={"name": "Test User", "email": "test@example.com", "age": 25},
                     is_modifying=True
@@ -274,7 +274,7 @@ class TestQueryModifyingOperations:
             # Execute query with is_modifying=False
             try:
                 QueryExecutionService.execute_query(
-                    query_template="UPDATE testuser SET name = :name, age = :age WHERE email = :email",
+                    query_template="UPDATE test_user SET name = :name, age = :age WHERE email = :email",
                     func=dummy_update_func,
                     kwargs={"name": "Test User Updated", "email": "test@example.com", "age": 30},
                     is_modifying=False
@@ -288,7 +288,7 @@ class TestQueryModifyingOperations:
     
     def test_query_decorator_default_is_modifying_false(self):
         """Test that Query decorator defaults is_modifying to False"""
-        @Query("SELECT * FROM testuser WHERE id = :id")
+        @Query("SELECT * FROM test_user WHERE id = :id")
         def select_user_by_id(id: int) -> Optional[TestUser]: ...
         
         # Mock the session behavior
@@ -342,7 +342,7 @@ class TestQueryModifyingOperations:
         
         # Verify the user exists by querying in a new session context
         with PySpringModel.create_managed_session() as session:
-            result = session.execute(text("SELECT * FROM testuser WHERE email = 'persistent@example.com'")).first()
+            result = session.execute(text("SELECT * FROM test_user WHERE email = 'persistent@example.com'")).first()
             assert result is not None
             assert result.name == "Persistent User"
             assert result.age == 25
@@ -380,11 +380,11 @@ class TestQueryModifyingOperations:
             with PySpringModel.create_managed_session(should_commit=False) as session:
                 # This should not commit
                 result = session.execute(text(
-                    "INSERT INTO testuser (name, email, age) VALUES ('Temp User', 'temp@example.com', 99)"
+                    "INSERT INTO test_user (name, email, age) VALUES ('Temp User', 'temp@example.com', 99)"
                 ))
                 # Verify the user exists within this session
                 temp_result = session.execute(text(
-                    "SELECT * FROM testuser WHERE email = 'temp@example.com'"
+                    "SELECT * FROM test_user WHERE email = 'temp@example.com'"
                 )).first()
                 assert temp_result is not None
                 # Force rollback by raising exception
@@ -399,7 +399,7 @@ class TestQueryModifyingOperations:
         # Double-check by direct query
         with PySpringModel.create_managed_session() as session:
             result = session.execute(text(
-                "SELECT * FROM testuser WHERE email = 'temp@example.com'"
+                "SELECT * FROM test_user WHERE email = 'temp@example.com'"
             )).first()
             assert result is None
     
@@ -413,13 +413,13 @@ class TestQueryModifyingOperations:
         # Update using commit=True
         with PySpringModel.create_managed_session(should_commit=True) as session:
             session.execute(text(
-                f"UPDATE testuser SET age = {original_age + 10} WHERE email = 'update@example.com'"
+                f"UPDATE test_user SET age = {original_age + 10} WHERE email = 'update@example.com'"
             ))
         
                           # Verify the change persisted
         with PySpringModel.create_managed_session() as session:
              result = session.execute(text(
-                 "SELECT age FROM testuser WHERE email = 'update@example.com'"
+                 "SELECT age FROM test_user WHERE email = 'update@example.com'"
              )).first()
              assert result is not None
              assert result.age == original_age + 10
@@ -428,11 +428,11 @@ class TestQueryModifyingOperations:
         try:
              with PySpringModel.create_managed_session(should_commit=False) as session:
                  session.execute(text(
-                     f"UPDATE testuser SET age = {original_age + 20} WHERE email = 'update@example.com'"
+                     f"UPDATE test_user SET age = {original_age + 20} WHERE email = 'update@example.com'"
                  ))
                  # Verify change within session
                  temp_result = session.execute(text(
-                     "SELECT age FROM testuser WHERE email = 'update@example.com'"
+                     "SELECT age FROM test_user WHERE email = 'update@example.com'"
                  )).first()
                  assert temp_result is not None
                  assert temp_result.age == original_age + 20
@@ -444,7 +444,7 @@ class TestQueryModifyingOperations:
          # Verify the uncommitted change was rolled back
         with PySpringModel.create_managed_session() as session:
              result = session.execute(text(
-                 "SELECT age FROM testuser WHERE email = 'update@example.com'"
+                 "SELECT age FROM test_user WHERE email = 'update@example.com'"
              )).first()
              assert result is not None
              assert result.age == original_age + 10  # Should still be the committed value
@@ -463,10 +463,10 @@ class TestQueryModifyingOperations:
         # Delete with commit=False (should not persist)
         try:
             with PySpringModel.create_managed_session(should_commit=False) as session:
-                session.execute(text("DELETE FROM testuser WHERE email = 'delete@example.com'"))
+                session.execute(text("DELETE FROM test_user WHERE email = 'delete@example.com'"))
                 # Verify deletion within session
                 temp_result = session.execute(text(
-                    "SELECT * FROM testuser WHERE email = 'delete@example.com'"
+                    "SELECT * FROM test_user WHERE email = 'delete@example.com'"
                 )).first()
                 assert temp_result is None
                 # Force rollback
@@ -477,18 +477,18 @@ class TestQueryModifyingOperations:
         # Verify user still exists after rollback
         with PySpringModel.create_managed_session() as session:
             result = session.execute(text(
-                "SELECT * FROM testuser WHERE email = 'delete@example.com'"
+                "SELECT * FROM test_user WHERE email = 'delete@example.com'"
             )).first()
             assert result is not None
         
         # Delete with commit=True (should persist)
         with PySpringModel.create_managed_session(should_commit=True) as session:
-            session.execute(text("DELETE FROM testuser WHERE email = 'delete@example.com'"))
+            session.execute(text("DELETE FROM test_user WHERE email = 'delete@example.com'"))
         
         # Verify user is gone
         with PySpringModel.create_managed_session() as session:
             result = session.execute(text(
-                "SELECT * FROM testuser WHERE email = 'delete@example.com'"
+                "SELECT * FROM test_user WHERE email = 'delete@example.com'"
             )).first()
             assert result is None
     
@@ -505,12 +505,12 @@ class TestQueryModifyingOperations:
         
         # Bulk update with commit=True
         with PySpringModel.create_managed_session(should_commit=True) as session:
-            session.execute(text("UPDATE testuser SET age = age + 5 WHERE email LIKE 'bulk%@example.com'"))
+            session.execute(text("UPDATE test_user SET age = age + 5 WHERE email LIKE 'bulk%@example.com'"))
         
         # Verify all bulk users were updated
         with PySpringModel.create_managed_session() as session:
             results = session.execute(text(
-                "SELECT name, age FROM testuser WHERE email LIKE 'bulk%@example.com' ORDER BY name"
+                "SELECT name, age FROM test_user WHERE email LIKE 'bulk%@example.com' ORDER BY name"
             )).fetchall()
             for i, result in enumerate(results):
                 expected_age = 20 + i + 5  # Original age + increment
@@ -534,15 +534,15 @@ class TestQueryModifyingOperations:
         with PySpringModel.create_managed_session(should_commit=False) as session:
             # Count users by age range
             young_count = session.execute(text(
-                "SELECT COUNT(*) as count FROM testuser WHERE age < 25"
+                "SELECT COUNT(*) as count FROM test_user WHERE age < 25"
             )).scalar() or 0
             
             adult_count = session.execute(text(
-                "SELECT COUNT(*) as count FROM testuser WHERE age BETWEEN 25 AND 60"
+                "SELECT COUNT(*) as count FROM test_user WHERE age BETWEEN 25 AND 60"
             )).scalar() or 0
             
             senior_count = session.execute(text(
-                "SELECT COUNT(*) as count FROM testuser WHERE age > 60"
+                "SELECT COUNT(*) as count FROM test_user WHERE age > 60"
             )).scalar() or 0
             
             assert young_count >= 2  # Young users + potentially others
@@ -553,22 +553,22 @@ class TestQueryModifyingOperations:
         with PySpringModel.create_managed_session(should_commit=True) as session:
             # Update all users over 30 to have age + 1
             session.execute(text(
-                "UPDATE testuser SET age = age + 1 WHERE age > 30 AND email LIKE '%@example.com'"
+                "UPDATE test_user SET age = age + 1 WHERE age > 30 AND email LIKE '%@example.com'"
             ))
         
         # Verify the conditional update
         with PySpringModel.create_managed_session() as session:
             adult1_result = session.execute(text(
-                "SELECT age FROM testuser WHERE email = 'adult1@example.com'"
+                "SELECT age FROM test_user WHERE email = 'adult1@example.com'"
             )).first()
             adult2_result = session.execute(text(
-                "SELECT age FROM testuser WHERE email = 'adult2@example.com'"
+                "SELECT age FROM test_user WHERE email = 'adult2@example.com'"
             )).first()
             senior_result = session.execute(text(
-                "SELECT age FROM testuser WHERE email = 'senior@example.com'"
+                "SELECT age FROM test_user WHERE email = 'senior@example.com'"
             )).first()
             young1_result = session.execute(text(
-                "SELECT age FROM testuser WHERE email = 'young1@example.com'"
+                "SELECT age FROM test_user WHERE email = 'young1@example.com'"
             )).first()
             assert adult1_result is not None
             assert adult1_result.age is not None
@@ -595,19 +595,19 @@ class TestQueryModifyingOperations:
         # Session 1: Read-only access (no commit needed)
         with PySpringModel.create_managed_session(should_commit=False) as session1:
             original_data = session1.execute(text(
-                "SELECT name, age FROM testuser WHERE email = 'isolation@example.com'"
+                "SELECT name, age FROM test_user WHERE email = 'isolation@example.com'"
             )).first()
             assert original_data is not None
             
             # Session 2: Modify with commit
             with PySpringModel.create_managed_session(should_commit=True) as session2:
                 session2.execute(text(
-                    "UPDATE testuser SET age = 999 WHERE email = 'isolation@example.com'"
+                    "UPDATE test_user SET age = 999 WHERE email = 'isolation@example.com'"
                 ))
             
             # Session 1 should still see original data (isolation)
             current_data = session1.execute(text(
-                "SELECT name, age FROM testuser WHERE email = 'isolation@example.com'"
+                "SELECT name, age FROM test_user WHERE email = 'isolation@example.com'"
             )).first()
             # Note: In SQLite with default isolation, this might see the change
             # This test documents the behavior rather than asserting specific isolation
@@ -617,7 +617,7 @@ class TestQueryModifyingOperations:
         # Verify the change persisted
         with PySpringModel.create_managed_session() as session:
             result = session.execute(text(
-                "SELECT age FROM testuser WHERE email = 'isolation@example.com'"
+                "SELECT age FROM test_user WHERE email = 'isolation@example.com'"
             )).first()
             assert result is not None
             assert result.age is not None
@@ -636,7 +636,7 @@ class TestQueryModifyingOperations:
             with PySpringModel.create_managed_session(should_commit=False) as session:
                 # This should fail due to unique constraint (if enforced)
                 session.execute(text(
-                    "INSERT INTO testuser (name, email, age) VALUES ('Duplicate User', 'unique@example.com', 30)"
+                    "INSERT INTO test_user (name, email, age) VALUES ('Duplicate User', 'unique@example.com', 30)"
                 ))
                 # If it somehow succeeds, force rollback
                 raise Exception("Force rollback")
@@ -650,7 +650,7 @@ class TestQueryModifyingOperations:
         # Verify original user is unchanged
         with PySpringModel.create_managed_session() as session:
             result = session.execute(text(
-                "SELECT name, age FROM testuser WHERE email = 'unique@example.com'"
+                "SELECT name, age FROM test_user WHERE email = 'unique@example.com'"
             )).first()
             assert result is not None
             assert result.name is not None
@@ -672,7 +672,7 @@ class TestQueryModifyingOperations:
         with PySpringModel.create_managed_session(should_commit=True) as session:
             for name, email, age in batch_data:
                 session.execute(text(
-                    f"INSERT INTO testuser (name, email, age, salary, status, category) VALUES ('{name}', '{email}', {age}, 0.0, 'active', 'general')"
+                    f"INSERT INTO test_user (name, email, age, salary, status, category) VALUES ('{name}', '{email}', {age}, 0.0, 'active', 'general')"
                 ))
         
         # Verify all batch inserts persisted
@@ -683,7 +683,7 @@ class TestQueryModifyingOperations:
         with PySpringModel.create_managed_session() as session:
             for name, email, age in batch_data:
                 result = session.execute(text(
-                    f"SELECT name, age FROM testuser WHERE email = '{email}'"
+                    f"SELECT name, age FROM test_user WHERE email = '{email}'"
                 )).first()
                 assert result is not None
                 assert result.name == name
@@ -699,7 +699,7 @@ class TestQueryModifyingOperations:
             with PySpringModel.create_managed_session(should_commit=False) as session:
                 for name, email, age in rollback_data:
                     session.execute(text(
-                        f"INSERT INTO testuser (name, email, age, salary, status, category) VALUES ('{name}', '{email}', {age}, 0.0, 'active', 'general')"
+                        f"INSERT INTO test_user (name, email, age, salary, status, category) VALUES ('{name}', '{email}', {age}, 0.0, 'active', 'general')"
                     ))
                 # Force rollback
                 raise Exception("Intentional rollback")
@@ -713,6 +713,6 @@ class TestQueryModifyingOperations:
         with PySpringModel.create_managed_session() as session:
             for name, email, age in rollback_data:
                 result = session.execute(text(
-                    f"SELECT * FROM testuser WHERE email = '{email}'"
+                    f"SELECT * FROM test_user WHERE email = '{email}'"
                 )).first()
                 assert result is None 

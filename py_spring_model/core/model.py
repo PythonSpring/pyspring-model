@@ -1,8 +1,10 @@
 import contextlib
+import re
 from typing import ClassVar, Iterator, Optional, Type, TypeVar
 from loguru import logger
 from sqlalchemy import Engine, MetaData
 from sqlalchemy.engine.base import Connection
+from sqlalchemy.orm import declared_attr
 from sqlmodel import SQLModel, Field
 
 from py_spring_model.core.py_spring_session import PySpringSession
@@ -19,6 +21,11 @@ class PySpringModel(SQLModel):
     It also includes a `clone` method for creating a copy of the model instance, and a `create_managed_session` context manager for creating a session that is automatically committed and closed.
 
     """
+
+    @declared_attr.directive
+    def __tablename__(cls) -> str:
+        s1 = re.sub(r'([A-Z]+)([A-Z][a-z])', r'\1_\2', cls.__name__)
+        return re.sub(r'([a-z\d])([A-Z])', r'\1_\2', s1).lower()
 
     __table_args__ = {"extend_existing": True}
     _engine: ClassVar[Optional[Engine]] = None
