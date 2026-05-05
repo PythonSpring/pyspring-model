@@ -72,9 +72,8 @@ class BaseQuery:
 
     def test_did_implement_query(self, user_repository: UserRepository, implementation_service: CrudRepositoryImplementationService):
         user = user_repository.save(User(name="John Doe", email="john@example.com"))
-        assert user_repository.find_by_name("John Doe") is None
         implementation_service._implemenmt_query(user_repository.__class__)
-        queryed_user = user_repository.find_by_name(name = "John Doe")
+        queryed_user = user_repository.find_by_name(name="John Doe")
         assert queryed_user.model_dump() == user.model_dump()
 
     

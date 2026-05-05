@@ -14,7 +14,7 @@ from py_spring_model.core.session_context_holder import SessionContextHolder, Tr
 
 
 class SessionUser(PySpringModel, table=True):
-    __tablename__ = "session_user"
+    __tablename__ = "py_spring_session_test_user"
     id: int = Field(default=None, primary_key=True)
     name: str
 
@@ -67,7 +67,7 @@ class BasePySpringSessionAdd:
         user = SessionUser(name="Alice")
         session.add(user)
         session.commit()
-        result = session.execute(text("SELECT name FROM session_user")).fetchall()
+        result = session.execute(text("SELECT name FROM py_spring_session_test_user")).fetchall()
         assert len(result) == 1
         assert result[0].name == "Alice"
 
@@ -76,7 +76,7 @@ class BasePySpringSessionAdd:
         users = [SessionUser(name="A"), SessionUser(name="B")]
         session.add_all(users)
         session.commit()
-        result = session.execute(text("SELECT name FROM session_user ORDER BY name")).fetchall()
+        result = session.execute(text("SELECT name FROM py_spring_session_test_user ORDER BY name")).fetchall()
         assert len(result) == 2
         assert result[0].name == "A"
         assert result[1].name == "B"
@@ -109,7 +109,7 @@ class BasePySpringSessionRefresh:
         user = SessionUser(name="Alice")
         session.add(user)
         session.flush()
-        session.execute(text("UPDATE session_user SET name = 'Updated' WHERE id = :id"), {"id": user.id})
+        session.execute(text("UPDATE py_spring_session_test_user SET name = 'Updated' WHERE id = :id"), {"id": user.id})
         session.refresh_current_session_instances()
         assert user.name == "Updated"
         session.rollback()
@@ -177,7 +177,7 @@ class BasePySpringSessionCommit:
         session.commit()
 
         session.rollback()
-        result = session.execute(text("SELECT COUNT(*) FROM session_user")).scalar()
+        result = session.execute(text("SELECT COUNT(*) FROM py_spring_session_test_user")).scalar()
         assert result == 0
 
         SessionContextHolder.pop_state()
@@ -191,7 +191,7 @@ class BasePySpringSessionCommit:
         session.add(user)
         session.commit()
 
-        result = session.execute(text("SELECT name FROM session_user")).fetchall()
+        result = session.execute(text("SELECT name FROM py_spring_session_test_user")).fetchall()
         assert len(result) == 1
         assert result[0].name == "Outermost"
 
@@ -203,7 +203,7 @@ class BasePySpringSessionCommit:
         session.add(user)
         session.commit()
 
-        result = session.execute(text("SELECT name FROM session_user")).fetchall()
+        result = session.execute(text("SELECT name FROM py_spring_session_test_user")).fetchall()
         assert len(result) == 1
         assert result[0].name == "NoState"
 

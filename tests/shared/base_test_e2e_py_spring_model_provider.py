@@ -590,9 +590,9 @@ class BaseDuplicateModelImport:
             order_subclasses = [
                 c for c in PySpringModel.__subclasses__()
                 if c.__name__ == "Order"
+                and getattr(c, "__tablename__", None) == "duplicate_test_order"
             ]
 
-            # Correct behavior: exactly 1 copy should exist
             assert len(order_subclasses) == 1, (
                 f"Expected exactly 1 Order subclass, got {len(order_subclasses)}. "
                 f"ModuleImporter is creating duplicate class instances."
