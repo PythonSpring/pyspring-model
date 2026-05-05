@@ -12,8 +12,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run tests
+      - name: Run tests (excluding e2e)
         uses: PythonSpring/actions/pytest@main
         with:
           python-version: ${{ matrix.python-version }}
-          pytest-args: ${{ github.event_name == 'pull_request' && '-m "not postgres"' || '' }}
+          pytest-args: '-m "not e2e and not postgres"'
+
+      # SQLite E2E
+      - name: Run e2e tests
+        uses: PythonSpring/actions/pytest@main
+        with:
+          python-version: ${{ matrix.python-version }}
+          pytest-args: '-m "e2e and not postgres"'
+
+      # Postgres
+      - name: Run postgres tests
+        uses: PythonSpring/actions/pytest@main
+        with:
+          python-version: ${{ matrix.python-version }}
+          pytest-args: '-m "postgres and not e2e"'
+
+      # Postgres E2E
+      - name: Run postgres e2e tests
+        uses: PythonSpring/actions/pytest@main
+        with:
+          python-version: ${{ matrix.python-version }}
+          pytest-args: '-m "postgres and e2e"'
