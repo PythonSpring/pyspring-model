@@ -174,8 +174,7 @@ class BasePySpringModelStarterSQLite:
         repo = ItemRepository()
 
         # Create
-        item = Item(name="Widget", quantity=10)
-        repo.save(item)
+        item = repo.save(Item(name="Widget", quantity=10))
         assert item.id is not None
 
         # Read
@@ -186,8 +185,8 @@ class BasePySpringModelStarterSQLite:
 
         # Update
         found.quantity = 20
-        repo.save(found)
-        updated = repo.find_by_id(item.id)
+        found = repo.save(found)
+        updated = repo.find_by_id(found.id)
         assert updated is not None
         assert updated.quantity == 20
 
@@ -436,8 +435,7 @@ class BasePySpringModelStarterPostgres:
         repo = ItemRepository()
 
         # Create
-        item = Item(name="Gadget", quantity=5)
-        repo.save(item)
+        item = repo.save(Item(name="Gadget", quantity=5))
         assert item.id is not None
 
         # Read
@@ -448,8 +446,8 @@ class BasePySpringModelStarterPostgres:
 
         # Update
         found.quantity = 50
-        repo.save(found)
-        updated = repo.find_by_id(item.id)
+        found = repo.save(found)
+        updated = repo.find_by_id(found.id)
         assert updated is not None
         assert updated.quantity == 50
 

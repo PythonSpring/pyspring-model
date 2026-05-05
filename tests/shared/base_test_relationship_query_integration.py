@@ -85,10 +85,8 @@ class BaseRelationshipQueryIntegration:
         self.service = CrudRepositoryImplementationService()
 
         # Seed data
-        eng = Department(name="Engineering")
-        sales = Department(name="Sales")
-        self.dept_repo.save(eng)
-        self.dept_repo.save(sales)
+        eng = self.dept_repo.save(Department(name="Engineering"))
+        sales = self.dept_repo.save(Department(name="Sales"))
 
         session = SessionContextHolder.get_or_create_session()
         session.add(Employee(name="Alice", role="engineer", salary=100, department_id=eng.id))

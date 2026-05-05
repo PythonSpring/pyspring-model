@@ -425,10 +425,8 @@ class BaseOperatorInLikeRelationship:
         self.service = CrudRepositoryImplementationService()
 
         # Seed categories with products
-        electronics = OpCategory(name="Electronics")
-        clothing = OpCategory(name="Clothing")
-        self.cat_repo.save(electronics)
-        self.cat_repo.save(clothing)
+        electronics = self.cat_repo.save(OpCategory(name="Electronics"))
+        clothing = self.cat_repo.save(OpCategory(name="Clothing"))
 
         session = SessionContextHolder.get_or_create_session()
         session.add(OpCategoryProduct(title="Phone Case", label="accessories", category_id=electronics.id))
