@@ -428,13 +428,12 @@ class BaseOperatorInLikeRelationship:
         electronics = self.cat_repo.save(OpCategory(name="Electronics"))
         clothing = self.cat_repo.save(OpCategory(name="Clothing"))
 
-        session = SessionContextHolder.get_or_create_session()
-        session.add(OpCategoryProduct(title="Phone Case", label="accessories", category_id=electronics.id))
-        session.add(OpCategoryProduct(title="USB Cable", label="cables", category_id=electronics.id))
-        session.add(OpCategoryProduct(title="Phone Charger", label="chargers", category_id=electronics.id))
-        session.add(OpCategoryProduct(title="T-Shirt", label="basics", category_id=clothing.id))
-        session.add(OpCategoryProduct(title="Jacket", label="outerwear", category_id=clothing.id))
-        session.commit()
+        with PySpringModel.create_managed_session() as session:
+            session.add(OpCategoryProduct(title="Phone Case", label="accessories", category_id=electronics.id))
+            session.add(OpCategoryProduct(title="USB Cable", label="cables", category_id=electronics.id))
+            session.add(OpCategoryProduct(title="Phone Charger", label="chargers", category_id=electronics.id))
+            session.add(OpCategoryProduct(title="T-Shirt", label="basics", category_id=clothing.id))
+            session.add(OpCategoryProduct(title="Jacket", label="outerwear", category_id=clothing.id))
 
         self.service._implemenmt_query(OpCategoryRepository)
 

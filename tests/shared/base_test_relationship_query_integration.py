@@ -88,13 +88,12 @@ class BaseRelationshipQueryIntegration:
         eng = self.dept_repo.save(Department(name="Engineering"))
         sales = self.dept_repo.save(Department(name="Sales"))
 
-        session = SessionContextHolder.get_or_create_session()
-        session.add(Employee(name="Alice", role="engineer", salary=100, department_id=eng.id))
-        session.add(Employee(name="Bob", role="engineer", salary=150, department_id=eng.id))
-        session.add(Employee(name="Charlie", role="manager", salary=200, department_id=eng.id))
-        session.add(Employee(name="Diana", role="sales_rep", salary=80, department_id=sales.id))
-        session.add(Employee(name="Eve", role="sales_rep", salary=90, department_id=sales.id))
-        session.commit()
+        with PySpringModel.create_managed_session() as session:
+            session.add(Employee(name="Alice", role="engineer", salary=100, department_id=eng.id))
+            session.add(Employee(name="Bob", role="engineer", salary=150, department_id=eng.id))
+            session.add(Employee(name="Charlie", role="manager", salary=200, department_id=eng.id))
+            session.add(Employee(name="Diana", role="sales_rep", salary=80, department_id=sales.id))
+            session.add(Employee(name="Eve", role="sales_rep", salary=90, department_id=sales.id))
 
         self.service._implemenmt_query(DepartmentRepository)
         self.service._implemenmt_query(EmployeeRepository)

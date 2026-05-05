@@ -371,11 +371,10 @@ class BaseRelationshipQueryImplementation:
         self.alice_id = alice.id
         self.bob_id = bob.id
 
-        session = SessionContextHolder.get_or_create_session()
-        session.add(Book(title="Sci-fi Book", genre="sci-fi", author_id=alice.id))
-        session.add(Book(title="Another Sci-fi", genre="sci-fi", author_id=alice.id))
-        session.add(Book(title="Fantasy Book", genre="fantasy", author_id=bob.id))
-        session.commit()
+        with PySpringModel.create_managed_session() as session:
+            session.add(Book(title="Sci-fi Book", genre="sci-fi", author_id=alice.id))
+            session.add(Book(title="Another Sci-fi", genre="sci-fi", author_id=alice.id))
+            session.add(Book(title="Fantasy Book", genre="fantasy", author_id=bob.id))
 
         self.service._implemenmt_query(AuthorRepository)
         self.service._implemenmt_query(BookRepository)
@@ -402,10 +401,8 @@ class BaseRelationshipQueryImplementation:
     def test_find_all_returns_all_when_all_match(self):
         """Both authors have books with some genre — verify both returned."""
         self._seed_data()
-        # Add a sci-fi book for Bob too
-        session = SessionContextHolder.get_or_create_session()
-        session.add(Book(title="Bob Sci-fi", genre="sci-fi", author_id=self.bob_id))
-        session.commit()
+        with PySpringModel.create_managed_session() as session:
+            session.add(Book(title="Bob Sci-fi", genre="sci-fi", author_id=self.bob_id))
         results = self.author_repo.find_all_by_books_genre(genre="sci-fi")
         assert len(results) == 2
         names = sorted(r.name for r in results)
