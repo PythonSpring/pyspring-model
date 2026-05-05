@@ -1,4 +1,5 @@
 import copy
+import inspect
 from typing import (
     Any,
     Callable,
@@ -450,11 +451,35 @@ class CrudRepositoryImplementationService:
         return result.rowcount
 
     def implement_query_for_all_crud_repository_inheritors(self) -> None:
-        for crud_repository_cls in self.get_all_crud_repository_inheritors():
-            if crud_repository_cls.__name__ in self.class_already_implemented:
+        all_inheritors = self.get_all_crud_repository_inheritors()
+
+        # Group classes by source file to detect duplicates caused by
+        # module path mismatches (e.g., 'repository.Foo' vs 'src.repository.Foo').
+        # Bind generated methods to ALL class objects sharing the same source.
+        source_groups: dict[str, list[Type[CrudRepository]]] = {}
+        for cls in all_inheritors:
+            source_file = inspect.getfile(cls)
+            source_groups.setdefault(source_file, []).append(cls)
+
+        for source_file, classes in source_groups.items():
+            representative = classes[0]
+            if representative.__name__ in self.class_already_implemented:
                 continue
-            self._implemenmt_query(crud_repository_cls)
-            self.class_already_implemented.add(crud_repository_cls.__name__)
+            self._implemenmt_query(representative)
+            self.class_already_implemented.add(representative.__name__)
+
+            # Bind the same generated methods to any duplicate class objects
+            for duplicate_cls in classes[1:]:
+                methods = self._get_additional_methods(duplicate_cls)
+                for method in methods:
+                    impl = getattr(representative, method, None)
+                    if impl is not None:
+                        setattr(duplicate_cls, method, impl)
+                logger.warning(
+                    f"[QUERY IMPLEMENTATION] Detected duplicate class for "
+                    f"{representative.__name__} from {source_file}. "
+                    f"Bound methods to both class objects."
+                )
 
 P = ParamSpec("P")
 T = TypeVar("T", bound=BaseModel)

@@ -13,7 +13,7 @@ from typing import (
 )
 
 from pydantic import BaseModel
-from sqlalchemy import Row, text
+from sqlalchemy import Row, text, bindparam
 
 from py_spring_model.core.model import PySpringModel
 from py_spring_model.py_spring_model_rest.service.curd_repository_implementation_service.crud_repository_implementation_service import CrudRepositoryImplementationService
@@ -43,7 +43,8 @@ class QueryExecutionService:
                 continue
             if key not in kwargs or kwargs[key] is None:
                 raise ValueError(f"Missing required argument: {key}")
-            if value_type != type(kwargs[key]):
+            expected_origin = get_origin(value_type) or value_type
+            if not isinstance(kwargs[key], expected_origin):
                 raise TypeError(f"Invalid type for argument {key}. Expected {value_type}, got {type(kwargs[key])}")
 
         with PySpringModel.create_managed_session(should_commit=is_modifying) as session:
@@ -53,14 +54,16 @@ class QueryExecutionService:
             actual_type = cls._get_actual_type(return_args, return_type)
             is_optional = type(None) in return_args
 
+            stmt = cls._prepare_statement(query_template, kwargs)
+
             # None return type (DELETE/UPDATE without RETURNING)
             if return_type is type(None):
-                session.execute(text(query_template), kwargs)
+                session.execute(stmt, kwargs)
                 return cast(RT, None)
 
             # Scalar return types (int, float, str, bool)
             if actual_type in (int, float, str, bool):
-                result = session.execute(text(query_template), kwargs).scalar()
+                result = session.execute(stmt, kwargs).scalar()
                 if result is None and is_optional:
                     return cast(RT, None)
                 return cast(RT, result)
@@ -68,12 +71,12 @@ class QueryExecutionService:
             # Iterable of BaseModel
             if return_origin in {list, Iterable} and return_args:
                 cls._validate_return_type(actual_type, return_type)
-                result = session.execute(text(query_template), kwargs).fetchall()
+                result = session.execute(stmt, kwargs).fetchall()
                 return cast(RT, [actual_type.model_validate(row._asdict()) for row in result])
 
             # Single BaseModel
             if issubclass(actual_type, BaseModel):
-                result = session.execute(text(query_template), kwargs).first()
+                result = session.execute(stmt, kwargs).first()
                 if result is None:
                     if is_optional:
                         return cast(RT, None)
@@ -81,6 +84,14 @@ class QueryExecutionService:
                 return cast(RT, cls._process_single_result(result, actual_type))
 
             raise ValueError(f"Invalid return type: {actual_type}")
+
+    @classmethod
+    def _prepare_statement(cls, query_template: str, kwargs: dict) -> Any:
+        stmt = text(query_template)
+        for key, value in kwargs.items():
+            if isinstance(value, (list, tuple, set)):
+                stmt = stmt.bindparams(bindparam(key, expanding=True))
+        return stmt
 
     @classmethod
     def _get_actual_type(cls, return_args: tuple[Type[Any]], return_type: Type[Any]) -> Type[Any]:
