@@ -33,12 +33,9 @@ class BaseFindAllByIds:
         PySpringModel._engine = None
 
     def test_find_all_by_ids_returns_matching_entities(self):
-        u1 = FindByIdsUser(name="Alice", email="a@e.com")
-        u2 = FindByIdsUser(name="Bob", email="b@e.com")
-        u3 = FindByIdsUser(name="Charlie", email="c@e.com")
-        self.repo.save(u1)
-        self.repo.save(u2)
-        self.repo.save(u3)
+        u1 = self.repo.save(FindByIdsUser(name="Alice", email="a@e.com"))
+        u2 = self.repo.save(FindByIdsUser(name="Bob", email="b@e.com"))
+        u3 = self.repo.save(FindByIdsUser(name="Charlie", email="c@e.com"))
 
         results = self.repo.find_all_by_ids([u1.id, u3.id])
         assert len(results) == 2
@@ -56,24 +53,20 @@ class BaseFindAllByIds:
         assert len(results) == 0
 
     def test_find_all_by_ids_with_single_id(self):
-        u1 = FindByIdsUser(name="Alice", email="a@e.com")
-        self.repo.save(u1)
+        u1 = self.repo.save(FindByIdsUser(name="Alice", email="a@e.com"))
         results = self.repo.find_all_by_ids([u1.id])
         assert len(results) == 1
         assert results[0].name == "Alice"
 
     def test_find_all_by_ids_returns_all_when_all_match(self):
-        u1 = FindByIdsUser(name="Alice", email="a@e.com")
-        u2 = FindByIdsUser(name="Bob", email="b@e.com")
-        self.repo.save(u1)
-        self.repo.save(u2)
+        u1 = self.repo.save(FindByIdsUser(name="Alice", email="a@e.com"))
+        u2 = self.repo.save(FindByIdsUser(name="Bob", email="b@e.com"))
         results = self.repo.find_all_by_ids([u1.id, u2.id])
         assert len(results) == 2
 
     def test_find_all_by_ids_partial_match(self):
         """Some IDs exist, some don't — should return only matching."""
-        u1 = FindByIdsUser(name="Alice", email="a@e.com")
-        self.repo.save(u1)
+        u1 = self.repo.save(FindByIdsUser(name="Alice", email="a@e.com"))
         results = self.repo.find_all_by_ids([u1.id, 999])
         assert len(results) == 1
         assert results[0].name == "Alice"

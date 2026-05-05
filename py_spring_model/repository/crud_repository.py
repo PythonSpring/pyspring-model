@@ -133,28 +133,29 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
     @Transactional
     def save(self, entity: T) -> T:
         session = SessionContextHolder.get_or_create_session()
-        session.add(entity)
-        return entity
+        return session.merge(entity)
 
     @Transactional
     def save_all(self, entities: Iterable[T]) -> list[T]:
         session = SessionContextHolder.get_or_create_session()
-        entity_list = list(entities)
-        session.add_all(entity_list)
-        return entity_list
+        return [session.merge(entity) for entity in entities]
 
     @Transactional
     def delete(self, entity: T) -> None:
         session = SessionContextHolder.get_or_create_session()
-        if self.exists_by_id(entity.id):  # type: ignore
-            session.delete(entity)
+        persisted = self._find_by_query({"id": entity.id})  # type: ignore
+        if persisted is not None:
+            session.delete(persisted)
 
     @Transactional
     def delete_all(self, entities: Iterable[T]) -> None:
         session = SessionContextHolder.get_or_create_session()
-        for entity in entities:
-            if self.exists_by_id(entity.id):  # type: ignore
-                session.delete(entity)
+        ids = [entity.id for entity in entities]  # type: ignore
+        if not ids:
+            return
+        statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
+        for persisted in self._find_all_by_statement(statement):
+            session.delete(persisted)
 
     @Transactional
     def delete_by_id(self, _id: ID) -> None:

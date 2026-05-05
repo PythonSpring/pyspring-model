@@ -27,10 +27,10 @@ class UserRepository(CrudRepository[int,User]):
     def find_all_by_status_in(self, status: list[str]) -> list[User]: ...
     def find_all_by_id_in_and_name(self, id: list[int], name: str) -> list[User]: ...
     def find_all_by_status_in_or_category_in(self, status: list[str], category: list[str]) -> list[User]: ...
-    @Query("SELECT * FROM user WHERE name = :name")
+    @Query('SELECT * FROM "user" WHERE name = :name')
     def query_uery_by_name(self, name: str) -> User: ...
 
-    @Query("SELECT * FROM user WHERE name = :name")
+    @Query('SELECT * FROM "user" WHERE name = :name')
     def query_user_view_by_name(self, name: str) -> UserView: ...
     
 
@@ -43,8 +43,8 @@ class BaseQuery:
 
     def teardown_method(self):
         logger.info("Tearing down test environment...")
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
 
     @pytest.fixture
     def user_repository(self):
@@ -71,8 +71,7 @@ class BaseQuery:
         assert str(statement).replace("\n", "") == 'SELECT "user".id, "user".name, "user".email, "user".status, "user".category FROM "user" WHERE "user".email = :email_1 OR "user".name = :name_1'
 
     def test_did_implement_query(self, user_repository: UserRepository, implementation_service: CrudRepositoryImplementationService):
-        user = User(name="John Doe", email="john@example.com")
-        user_repository.save(user)
+        user = user_repository.save(User(name="John Doe", email="john@example.com"))
         assert user_repository.find_by_name("John Doe") is None
         implementation_service._implemenmt_query(user_repository.__class__)
         queryed_user = user_repository.find_by_name(name = "John Doe")
@@ -80,15 +79,13 @@ class BaseQuery:
 
     
     def test_query_decorator_did_implement_query(self, user_repository: UserRepository, implementation_service: CrudRepositoryImplementationService):
-        test_user = User(name="name", email="email")
-        user_repository.save(test_user)
+        test_user = user_repository.save(User(name="name", email="email"))
         user = user_repository.query_uery_by_name(name= "name")
         assert user.model_dump() == test_user.model_dump()
 
 
     def test_query_decorator_did_implement_query_with_view(self, user_repository: UserRepository, implementation_service: CrudRepositoryImplementationService):
-        test_user = User(name="name", email="email")
-        user_repository.save(test_user)
+        user_repository.save(User(name="name", email="email"))
         user_view = user_repository.query_user_view_by_name(name= "name")
         assert user_view.name == "name"
 
@@ -139,13 +136,9 @@ class BaseQuery:
 
     def test_in_operator_implementation(self, user_repository: UserRepository, implementation_service: CrudRepositoryImplementationService):
         # Create test users
-        user1 = User(name="John", email="john@example.com", status="active", category="premium")
-        user2 = User(name="Jane", email="jane@example.com", status="pending", category="premium")
-        user3 = User(name="Bob", email="bob@example.com", status="active", category="basic")
-        
-        user_repository.save(user1)
-        user_repository.save(user2)
-        user_repository.save(user3)
+        user1 = user_repository.save(User(name="John", email="john@example.com", status="active", category="premium"))
+        user2 = user_repository.save(User(name="Jane", email="jane@example.com", status="pending", category="premium"))
+        user3 = user_repository.save(User(name="Bob", email="bob@example.com", status="active", category="basic"))
         
         # Implement the query
         implementation_service._implemenmt_query(user_repository.__class__)
@@ -271,8 +264,8 @@ class BaseCountExistsDeleteExecution:
         SQLModel.metadata.create_all(self.engine)
 
     def teardown_method(self):
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
 
     @pytest.fixture
     def repo(self):
@@ -364,8 +357,8 @@ class BaseRelationshipQueryImplementation:
         SQLModel.metadata.create_all(self.engine)
 
     def teardown_method(self):
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
 
     def _seed_data(self):
         """Seed test data: Alice has 2 sci-fi books, Bob has 1 fantasy book."""
@@ -373,10 +366,8 @@ class BaseRelationshipQueryImplementation:
         self.book_repo = BookRepository()
         self.service = CrudRepositoryImplementationService()
 
-        alice = Author(name="Alice")
-        bob = Author(name="Bob")
-        self.author_repo.save(alice)
-        self.author_repo.save(bob)
+        alice = self.author_repo.save(Author(name="Alice"))
+        bob = self.author_repo.save(Author(name="Bob"))
         self.alice_id = alice.id
         self.bob_id = bob.id
 
