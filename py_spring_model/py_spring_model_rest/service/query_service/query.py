@@ -43,7 +43,8 @@ class QueryExecutionService:
                 continue
             if key not in kwargs or kwargs[key] is None:
                 raise ValueError(f"Missing required argument: {key}")
-            if value_type != type(kwargs[key]):
+            expected_origin = get_origin(value_type) or value_type
+            if not isinstance(kwargs[key], expected_origin):
                 raise TypeError(f"Invalid type for argument {key}. Expected {value_type}, got {type(kwargs[key])}")
 
         with PySpringModel.create_managed_session(should_commit=is_modifying) as session:
