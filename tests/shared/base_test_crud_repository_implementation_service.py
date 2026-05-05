@@ -325,7 +325,7 @@ class Book(PySpringModel, table=True):
     id: int = Field(default=None, primary_key=True)
     title: str = ""
     genre: str = ""
-    author_id: Optional[int] = Field(default=None, foreign_key="rel_test_author.id")
+    author_id: Optional[int] = Field(default=None, foreign_key="rel_test_author.id", ondelete="CASCADE")
     author: Optional[Author] = Relationship(back_populates="books")
 
 

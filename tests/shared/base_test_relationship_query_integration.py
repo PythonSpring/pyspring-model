@@ -30,7 +30,7 @@ class Employee(PySpringModel, table=True):
     name: str = ""
     role: str = ""
     salary: int = 0
-    department_id: Optional[int] = Field(default=None, foreign_key="rel_int_department.id")
+    department_id: Optional[int] = Field(default=None, foreign_key="rel_int_department.id", ondelete="CASCADE")
     department: Optional[Department] = Relationship(back_populates="employees")
 
 
