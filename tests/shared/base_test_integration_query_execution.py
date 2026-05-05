@@ -59,8 +59,8 @@ class BaseIsNullIsNotNull:
         self.service._implemenmt_query(self.repo.__class__)
 
     def teardown_method(self):
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
 
     def test_is_null_returns_users_without_nickname(self):
         users = self.repo.find_all_by_nickname_is_null()
@@ -160,8 +160,8 @@ class BaseCountExistsDeleteWithFieldOperations:
         self.service._implemenmt_query(self.repo.__class__)
 
     def teardown_method(self):
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
 
     # -----------------------------------------------------------------------
     # count_by with field operations
@@ -285,8 +285,8 @@ class BaseGetByPrefix:
         self.service._implemenmt_query(self.repo.__class__)
 
     def teardown_method(self):
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
 
     def test_get_by_returns_single_result(self):
         user = self.repo.get_by_name(name="Alice")

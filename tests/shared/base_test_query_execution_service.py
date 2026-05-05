@@ -46,8 +46,8 @@ class BaseQueryExecutionServiceParameterized:
         self.repo = QESUserRepository()
 
     def teardown_method(self):
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
 
     def test_parameterized_query_returns_single_result(self):
         self.repo.save(QESUser(name="Alice", email="alice@example.com", age=30))

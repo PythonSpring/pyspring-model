@@ -100,8 +100,8 @@ class BaseQueryModifyingOperations:
     def teardown_method(self):
         """Clean up test environment"""
         logger.info("Tearing down test environment...")
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
     
     def test_insert_with_commit_true(self):
         """Test INSERT operation with is_modifying=True (should commit)"""

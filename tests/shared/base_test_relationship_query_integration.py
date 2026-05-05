@@ -100,8 +100,8 @@ class BaseRelationshipQueryIntegration:
         self.service._implemenmt_query(EmployeeRepository)
 
     def teardown_method(self):
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
 
     # --- SELECT queries ---
 

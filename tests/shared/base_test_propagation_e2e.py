@@ -64,8 +64,8 @@ class BasePropagationE2E:
         SessionContextHolder.clear()
         SQLModel.metadata.create_all(self.engine)
         yield
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
         PySpringModel._engine = None
         PySpringModel._metadata = None
         PySpringModel._connection = None

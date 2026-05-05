@@ -93,8 +93,8 @@ class BaseWrapperUnknownParameter:
         self.service._implemenmt_query(WrapperRepo)
 
     def teardown_method(self):
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
         PySpringModel._engine = None
 
     def test_unknown_parameter_raises_value_error(self):

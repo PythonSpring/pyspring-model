@@ -28,8 +28,8 @@ class BaseFindAllByIds:
         self.repo = FindByIdsUserRepository()
 
     def teardown_method(self):
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
         PySpringModel._engine = None
 
     def test_find_all_by_ids_returns_matching_entities(self):

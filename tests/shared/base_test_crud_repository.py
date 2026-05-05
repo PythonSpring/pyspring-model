@@ -23,8 +23,8 @@ class BaseCrudRepository:
 
     def teardown_method(self):
         logger.info("Tearing down test environment...")
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
 
     @pytest.fixture
     def user_repository(self):

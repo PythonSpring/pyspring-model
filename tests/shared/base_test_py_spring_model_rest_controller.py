@@ -31,8 +31,8 @@ class BasePySpringModelRestController:
         SQLModel.metadata.create_all(self.engine)
 
     def teardown_method(self):
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
 
     def _create_controller(self):
         controller = PySpringModelRestController.__new__(PySpringModelRestController)
@@ -117,8 +117,8 @@ class BasePostConstructConditionalRegistration:
         SQLModel.metadata.create_all(self.engine)
 
     def teardown_method(self):
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
 
     def _create_controller_with_properties(self, create_crud_routes: bool) -> PySpringModelRestController:
         controller = PySpringModelRestController.__new__(PySpringModelRestController)
@@ -177,8 +177,8 @@ class BaseRegisterBasicCrudRoutesRouterAssertion:
         SQLModel.metadata.create_all(self.engine)
 
     def teardown_method(self):
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
 
     def test_register_routes_raises_when_router_is_none(self):
         """_register_basic_crud_routes should raise AssertionError when router is None."""

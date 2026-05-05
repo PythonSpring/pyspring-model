@@ -24,8 +24,8 @@ class BasePySpringModelRestService:
         self.service = PySpringModelRestService()
 
     def teardown_method(self):
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
 
     def test_create_and_get(self):
         user = RestUser(name="Alice", email="alice@example.com")

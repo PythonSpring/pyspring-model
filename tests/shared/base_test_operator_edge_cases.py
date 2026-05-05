@@ -118,8 +118,8 @@ class BaseOperatorInLike:
         self.service._implemenmt_query(OpProductRepository)
 
     def teardown_method(self):
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
         PySpringModel._engine = None
 
     # ================================================================
@@ -439,8 +439,8 @@ class BaseOperatorInLikeRelationship:
         self.service._implemenmt_query(OpCategoryRepository)
 
     def teardown_method(self):
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
         PySpringModel._engine = None
 
     def test_relationship_in_single_value(self):

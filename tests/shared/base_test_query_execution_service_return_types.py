@@ -66,8 +66,8 @@ class BaseQueryReturnTypes:
         self.repo.save(ReturnTypeUser(name="Bob", email="b@e.com", age=25, salary=40000.0, active=False))
 
     def teardown_method(self):
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
         PySpringModel._engine = None
         PySpringModel._metadata = None
 
@@ -146,8 +146,8 @@ class BaseQueryExecutionServiceInvalidReturnType:
         SQLModel.metadata.create_all(self.engine)
 
     def teardown_method(self):
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
         PySpringModel._engine = None
         PySpringModel._metadata = None
 

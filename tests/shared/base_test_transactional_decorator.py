@@ -33,8 +33,8 @@ class BaseTransactionalDecorator:
 
     def teardown_method(self):
         """Tear down test environment"""
-        SQLModel.metadata.drop_all(self.engine)
         SessionContextHolder.clear()
+        SQLModel.metadata.drop_all(self.engine)
         PySpringModel._engine = None
         PySpringModel._metadata = None
         PySpringModel._connection = None
