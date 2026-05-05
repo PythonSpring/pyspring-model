@@ -451,10 +451,10 @@ class CrudRepositoryImplementationService:
                 statement = statement.where(condition)
         result = session.exec(statement)
         return result.rowcount
-        def implement_query_for_all_crud_repository_inheritors(self) -> None:
-            all_inheritors = self.get_all_crud_repository_inheritors()
-            for _class in all_inheritors:
-                self._implemenmt_query(_class)
+    def implement_query_for_all_crud_repository_inheritors(self) -> None:
+        all_inheritors = self.get_all_crud_repository_inheritors()
+        for _class in all_inheritors:
+            self._implemenmt_query(_class)
 
 P = ParamSpec("P")
 T = TypeVar("T", bound=BaseModel)
