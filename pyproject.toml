@@ -37,4 +37,5 @@ dev = [
 [tool.pytest.ini_options]
 markers = [
     "e2e: end-to-end tests that boot the full application",
+    "postgres: PostgreSQL tests via testcontainers (require Docker)",
 ]
