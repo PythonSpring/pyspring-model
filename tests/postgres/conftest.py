@@ -27,7 +27,12 @@ def db_engine(request, pg_container):
     admin_engine.dispose()
 
     test_url = admin_url.rsplit("/", 1)[0] + f"/{db_name}"
-    engine = create_engine(test_url, echo=False, poolclass=NullPool)
+    engine = create_engine(
+        test_url,
+        echo=False,
+        poolclass=NullPool,
+        connect_args={"options": "-c lock_timeout=3000"},
+    )
 
     if request.instance is not None:
         request.instance.engine = engine
