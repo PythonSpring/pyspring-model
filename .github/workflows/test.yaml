@@ -12,29 +12,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run tests (excluding e2e)
-        uses: PythonSpring/actions/pytest@main
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          pytest-args: '-m "not e2e and not postgres"'
+
+      - name: Install dependencies
+        run: |
+          pip install pdm
+          pdm install -d
+
+      - name: Run tests (excluding e2e)
+        run: pdm run pytest -m "not e2e and not postgres"
 
       # SQLite E2E
       - name: Run e2e tests
-        uses: PythonSpring/actions/pytest@main
-        with:
-          python-version: ${{ matrix.python-version }}
-          pytest-args: '-m "e2e and not postgres"'
+        run: pdm run pytest -m "e2e and not postgres"
 
       # Postgres
       - name: Run postgres tests
-        uses: PythonSpring/actions/pytest@main
-        with:
-          python-version: ${{ matrix.python-version }}
-          pytest-args: '-m "postgres and not e2e"'
+        run: pdm run pytest -m "postgres and not e2e"
 
       # Postgres E2E
       - name: Run postgres e2e tests
-        uses: PythonSpring/actions/pytest@main
-        with:
-          python-version: ${{ matrix.python-version }}
-          pytest-args: '-m "postgres and e2e"'
+        run: pdm run pytest -m "postgres and e2e"
