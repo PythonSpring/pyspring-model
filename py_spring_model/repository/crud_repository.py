@@ -184,6 +184,7 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
         persisted = self._find_by_query({"id": entity.id})  # type: ignore
         if persisted is not None:
             session.delete(persisted)
+            session.flush()
 
     @Transactional
     def delete_all(self, entities: Iterable[T]) -> None:
@@ -194,6 +195,7 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
         statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
         for persisted in self._find_all_by_statement(statement):
             session.delete(persisted)
+        session.flush()
 
     @Transactional
     def delete_by_id(self, _id: ID) -> None:
@@ -201,6 +203,7 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
         entity = self._find_by_query({"id": _id})
         if entity is not None:
             session.delete(entity)
+            session.flush()
 
     @Transactional
     def delete_all_by_ids(self, ids: list[ID]) -> None:
@@ -208,6 +211,7 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
         statement = select(self.model_class).where(self.model_class.id.in_(ids))  # type: ignore
         for entity in self._find_all_by_statement(statement):
             session.delete(entity)
+        session.flush()
 
     @Transactional
     def count(self) -> int:

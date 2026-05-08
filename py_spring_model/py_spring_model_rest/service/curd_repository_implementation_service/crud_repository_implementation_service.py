@@ -447,7 +447,7 @@ class CrudRepositoryImplementationService:
             statement = delete(model_type)
             if condition is not None:
                 statement = statement.where(condition)
-        result = session.execute(statement)
+        result = session.exec(statement)
         return result.rowcount
 
     def implement_query_for_all_crud_repository_inheritors(self) -> None:

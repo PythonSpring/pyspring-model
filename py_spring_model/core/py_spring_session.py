@@ -21,7 +21,7 @@ class PySpringSession(Session):
 
     def __init__(self, *args, **kwargs):
         self.current_session_instance: list[SQLModel] = []
-
+        kwargs.setdefault("autoflush", False)
         super().__init__(*args, **kwargs)
 
     def add(self, instance: SQLModel, _warn: bool = True) -> None:
