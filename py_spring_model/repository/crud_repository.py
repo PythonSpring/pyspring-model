@@ -11,7 +11,7 @@ from typing import (
 )
 from uuid import UUID
 
-from sqlalchemy import Select, func
+from sqlalchemy import Select, func, inspect as sa_inspect
 from sqlmodel import Session, select
 from sqlmodel.sql.expression import Select, SelectOfScalar
 
@@ -130,15 +130,50 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
             statement = statement.limit(limit)
         return list(session.exec(statement).all())
 
+    def _is_new(self, entity: T) -> bool:
+        state = sa_inspect(entity, raiseerr=False)
+        if state is None:
+            return True
+        return state.transient
+
     @Transactional
     def save(self, entity: T) -> T:
         session = SessionContextHolder.get_or_create_session()
+        if self._is_new(entity):
+            session.add(entity)
+            return entity
         return session.merge(entity)
 
     @Transactional
     def save_all(self, entities: Iterable[T]) -> list[T]:
         session = SessionContextHolder.get_or_create_session()
-        return [session.merge(entity) for entity in entities]
+        result = []
+        for entity in entities:
+            if self._is_new(entity):
+                session.add(entity)
+                result.append(entity)
+            else:
+                result.append(session.merge(entity))
+        return result
+
+    @Transactional
+    def save_and_flush(self, entity: T) -> T:
+        session = SessionContextHolder.get_or_create_session()
+        saved = self.save(entity)
+        session.flush()
+        return saved
+
+    @Transactional
+    def save_all_and_flush(self, entities: Iterable[T]) -> list[T]:
+        session = SessionContextHolder.get_or_create_session()
+        saved = self.save_all(entities)
+        session.flush()
+        return saved
+
+    @Transactional
+    def flush(self) -> None:
+        session = SessionContextHolder.get_or_create_session()
+        session.flush()
 
     @Transactional
     def delete(self, entity: T) -> None:
