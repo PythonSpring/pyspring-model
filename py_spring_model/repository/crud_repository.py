@@ -141,8 +141,10 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
         session = SessionContextHolder.get_or_create_session()
         if self._is_new(entity):
             session.add(entity)
-            return entity
-        return session.merge(entity)
+        else:
+            entity = session.merge(entity)
+        session.flush()
+        return entity
 
     @Transactional
     def save_all(self, entities: Iterable[T]) -> list[T]:
@@ -154,6 +156,7 @@ class CrudRepository(RepositoryBase, Generic[ID, T]):
                 result.append(entity)
             else:
                 result.append(session.merge(entity))
+        session.flush()
         return result
 
     @Transactional
