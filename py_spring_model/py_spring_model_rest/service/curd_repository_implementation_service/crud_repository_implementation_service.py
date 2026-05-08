@@ -97,6 +97,7 @@ class CrudRepositoryImplementationService:
                 current_func.__annotations__
             )
             RETURN_KEY = "return"
+            return_type = copy_annotations.get(RETURN_KEY, None)
             if RETURN_KEY in copy_annotations:
                 copy_annotations.pop(RETURN_KEY)
 
@@ -109,7 +110,7 @@ class CrudRepositoryImplementationService:
                     f"Invalid number of annotations. Expected {query.required_fields}, received {list(copy_annotations.keys())}."
                 )
 
-            wrapped_method = self.create_implementation_wrapper(query, model_type, copy_annotations, param_to_field_mapping)
+            wrapped_method = self.create_implementation_wrapper(query, model_type, copy_annotations, return_type, param_to_field_mapping)
             logger.info(
                 f"Binding method: {method} to {repository_type}, with query: {query}"
             )
@@ -168,7 +169,7 @@ class CrudRepositoryImplementationService:
         else:
             return word[:-1]
 
-    def create_implementation_wrapper(self, query: _Query, model_type: Type[PySpringModel], original_func_annotations: dict[str, Any], param_to_field_mapping: dict[str, str]) -> Callable[..., Any]:
+    def create_implementation_wrapper(self, query: _Query, model_type: Type[PySpringModel], original_func_annotations: dict[str, Any], return_type: Any, param_to_field_mapping: dict[str, str]) -> Callable[..., Any]:
         def wrapper(*args, **kwargs) -> Any:
             field_kwargs = {}
             for param_name, value in kwargs.items():
@@ -204,6 +205,7 @@ class CrudRepositoryImplementationService:
                     return result
 
         wrapper.__annotations__ = original_func_annotations
+        wrapper.__annotations__["return"] = return_type
         return wrapper
 
     def _get_sql_statement(
@@ -447,39 +449,12 @@ class CrudRepositoryImplementationService:
             statement = delete(model_type)
             if condition is not None:
                 statement = statement.where(condition)
-        result = session.execute(statement)
+        result = session.exec(statement)
         return result.rowcount
-
     def implement_query_for_all_crud_repository_inheritors(self) -> None:
         all_inheritors = self.get_all_crud_repository_inheritors()
-
-        # Group classes by source file to detect duplicates caused by
-        # module path mismatches (e.g., 'repository.Foo' vs 'src.repository.Foo').
-        # Bind generated methods to ALL class objects sharing the same source.
-        source_groups: dict[str, list[Type[CrudRepository]]] = {}
-        for cls in all_inheritors:
-            source_file = inspect.getfile(cls)
-            source_groups.setdefault(source_file, []).append(cls)
-
-        for source_file, classes in source_groups.items():
-            representative = classes[0]
-            if representative.__name__ in self.class_already_implemented:
-                continue
-            self._implemenmt_query(representative)
-            self.class_already_implemented.add(representative.__name__)
-
-            # Bind the same generated methods to any duplicate class objects
-            for duplicate_cls in classes[1:]:
-                methods = self._get_additional_methods(duplicate_cls)
-                for method in methods:
-                    impl = getattr(representative, method, None)
-                    if impl is not None:
-                        setattr(duplicate_cls, method, impl)
-                logger.warning(
-                    f"[QUERY IMPLEMENTATION] Detected duplicate class for "
-                    f"{representative.__name__} from {source_file}. "
-                    f"Bound methods to both class objects."
-                )
+        for _class in all_inheritors:
+            self._implemenmt_query(_class)
 
 P = ParamSpec("P")
 T = TypeVar("T", bound=BaseModel)
